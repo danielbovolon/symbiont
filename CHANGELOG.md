@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4 — 2026-10-27
+- Fixed: echo feedback ran away and distorted. Return now capped at 90 %, unity-gain saturator and highpass inside the loop
+- Master safety: fast compressor plus soft clipper (ceiling −0.1 dBFS); memory ring leveller keeps the granular loop stable
+- More extreme ranges: Sharp, Self-bend, Harmonic FM, bonds and Pressure (×3) go much further; octave −4 to +3; glide to 3 s; density 200/s; transpose ±36
+- New colour: Crush (sample-rate and bit reduction)
+- Filter: highpass and notch modes; resonance to self-oscillation; LFO shapes ramp and chaos; tempo-synced LFO; Near → bright (cutoff follows distance); Audio FM of the cutoff
+- Filter bar on every mixer strip: live cutoff and LFO range, drag to set depth
+- Orbits: around the listener (full circles behind your head); new paths spiral and wander; speed up to 8 Hz
+- Stronger space: wider pan, head shadow on the far ear, darker rear, stronger distance cues, adjustable doppler
+- Motion up to 300 %; tides up to 80 Hz with Crush and Resonance targets
+- Seed a wild one (key W)
+
 ## 0.3 — 2026-10-27
 - Sound core rebuilt on the 0.1 voice (folded sine, self-bend, cross-bonds). FM now uses pure sine modulators with tamed depths, so it stays tonal
 - Roar, Ring, Hum and Sing re-voiced musically, inspired by the SOMA Lyra-8: tube drive, bell partials with a string resonance, detuned beating twin with sub, vibrato with soft vowels

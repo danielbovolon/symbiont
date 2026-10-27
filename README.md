@@ -1,4 +1,4 @@
-# Symbiont 0.3
+# Symbiont 0.4
 
 A generative feedback / FM / granular instrument built as an ecosystem.
 Four organisms live in a polar listening field around you. They bend each other's phase, feed on a shared memory of everything the room has heard, compete as populations, and rewrite their own rhythms while they play. Nothing repeats exactly.
@@ -23,7 +23,7 @@ Press **Wake**. On iOS, tap Wake once more if you hear nothing: Safari only star
    ```bash
    git init
    git add .
-   git commit -m "Symbiont 0.3"
+   git commit -m "Symbiont 0.4"
    git branch -M main
    git remote add origin git@github.com:<you>/symbiont.git
    git push -u origin main
@@ -32,7 +32,7 @@ Press **Wake**. On iOS, tap Wake once more if you hear nothing: Safari only star
 3. After a minute the app is live at `https://<you>.github.io/symbiont/`.
 4. On a phone, open that URL and use **Add to Home Screen** (iOS Share menu, Android browser menu) to install it as an app.
 
-When you publish changes, bump `VERSION` in `js/app.js` and in `sw.js` (`symbiont-v0.3` → `symbiont-v0.4`) so installed copies pick up the new files. Tag releases with `git tag v0.3 && git push --tags`. See `CHANGELOG.md` for the version history.
+When you publish changes, bump `VERSION` in `js/app.js` and in `sw.js` (`symbiont-v0.4` → `symbiont-v0.5`) so installed copies pick up the new files. Tag releases with `git tag v0.4 && git push --tags`. See `CHANGELOG.md` for the version history.
 
 `.nojekyll` is included so GitHub Pages serves the files as they are.
 
@@ -59,7 +59,7 @@ The field is a top-down view with you, the listener, at the centre. Left/right i
 
 | Gesture | What it does |
 |---|---|
-| Drag an organism | Move the centre of its orbit (the small cross) |
+| Drag an organism | Move the centre of its orbit (the small cross). For organisms circling the listener, dragging in or out sets the radius |
 | Drag empty space | **Stir**: organisms near your finger get excited. Bonds tighten, roar grows, grains burst, pulses fire. Vertical speed bends pitch slightly. Stirring also feeds that organism's population |
 | Scroll over an organism | Gain |
 | Double-click / double-tap an organism | Solo |
@@ -76,24 +76,31 @@ The outer ring is the **memory ring**, the last 8 seconds of the master output. 
 
 **Organism** page:
 
-- **Voice**: octave, fine tune, body (oscillator vs. grain cloud), glide, Sharp (wavefold), Self-bend (feedback FM on a pure sine), and Harmonic FM with integer ratios (×½ to ×7)
-- **Colour**: four voicings you can blend freely
+- **Voice**: octave (−4 to +3), fine tune, body (oscillator vs. grain cloud), glide, Sharp (wavefold), Self-bend (feedback FM on a pure sine), and Harmonic FM with integer ratios (×½ to ×7)
+- **Colour**: five voicings you can blend freely
   - **Roar**: warm asymmetric tube drive
   - **Ring**: bell partials (1 : 3.5 FM) that open with each hit, plus a string resonance tuned to the note
   - **Hum**: a detuned twin that beats slowly against the voice, plus a sub octave
   - **Sing**: vibrato and two soft formants drifting through vowels
-- **Filter**: lowpass or bandpass with cutoff, resonance and its own LFO (sine, tri, drift, step; 50 s to 12 Hz; up to ±3.5 octaves), plus envelope → cutoff. *LFO now* shows where the LFO is
-- **Orbit**: each organism moves on its own path around its anchor: ellipse, figure eight or pendulum, clockwise or counter-clockwise, with speed (still to 3 Hz), X and Y axis and tilt. Give organisms different speeds and directions and they cross each other's paths in the stereo field
+  - **Crush**: sample-rate and bit reduction (14 bit down to 3 bit, up to ÷49)
+- **Filter**: lowpass, bandpass, highpass or notch; resonance up to self-oscillation (“scream”). It moves on its own:
+  - **LFO**: sine, tri, ramp, drift, step or chaos; free (50 s to 40 Hz) or locked to the tempo (8 bars to 1/16); up to ±3.5 octaves
+  - **Env → cutoff**: each hit opens or closes it
+  - **Near → bright**: cutoff follows the organism's distance from you
+  - **Audio FM**: the organism modulates its own cutoff at audio rate for snarls and metallic edges
+  - *Cutoff now* shows the live cutoff. Each mixer strip also has a filter bar: the dot is the live cutoff, the shaded range is how far the LFO moves it. Drag the bar sideways to set the LFO depth, tap it to open the filter
+- **Orbit**: how the organism travels. Around *its cross* or around *the listener* (full circles past your head and behind you); paths: ellipse, figure eight, pendulum, spiral or wander (smooth flights to random points); clockwise or counter-clockwise; speed from still to 8 Hz (a whirling, rotating-speaker effect at the top); X and Y axis; tilt
 - **Bonds**: audio-rate phase modulation from each other organism
 - **Cloud**: grain source (Memory ring, or Recording to load a file; tap Recording again to replace it), density, size, position, spray, stereo width, transpose, scatter in scale steps, reverse
 - **Pulse**: drone or euclidean pulse ring with steps, hits, rotation, attack (or the swell time of a drone), decay, chance, wander and step length. Tap cells to flip steps
 
 **World** page:
 
-- **Ecology**: a four-species competitive Lotka–Volterra system in its chaotic regime. Each population swells and starves its organism's level, bond depth and grain density. Pressure scales every bond at once. Motion scales every orbit, depth, drift and the interaural delay
-- **Tides**: four modulators with Sine, Tri, Saw, Drift, Step, Chaos (logistic map), Ecology (follows population) and Follow (follows loudness) shapes. Each has 16 possible targets including cutoff, the four colours, orbit speed and gain, rates from 200 s to 40 Hz, phase spread across organisms and a per-organism mask
-- **Space**: algorithmic room; ping-pong echo with saturating feedback (above 100 % return it sustains itself) and a wobbling delay line; warm master Drive; stereo width; memory feed; master
-- **Clock**: tempo, root, scale (including Harmonic and Rast microtonal sets), mutation, drift. **Seed** grows a completely new ecosystem
+- **Motion**: Motion scales every orbit (up to 300 %), Doppler sets how much pitch bends as organisms rush toward or away from you, Pressure scales every bond (up to ×3).
+- **Ecology**: a four-species competitive Lotka–Volterra system in its chaotic regime. Each population swells and starves its organism's level, bond depth and grain density. 
+- **Tides**: four modulators with Sine, Tri, Saw, Drift, Step, Chaos (logistic map), Ecology (follows population) and Follow (follows loudness) shapes. Each has 18 possible targets including cutoff, resonance, the colours, crush, orbit speed and gain, rates from 200 s to 80 Hz, phase spread across organisms and a per-organism mask
+- **Space**: algorithmic room; ping-pong echo with a wobbling delay line (return capped at 90 %, see below); warm master Drive; stereo width; memory feed; master
+- **Clock**: tempo, root, scale (including Harmonic and Rast microtonal sets), mutation, drift. **Seed** grows a completely new ecosystem; **Seed a wild one** (or `W`) grows an extreme one
 
 Sections fold open and closed. The app remembers which ones you closed.
 
@@ -104,16 +111,25 @@ Inside the claude.ai artifact viewer, takes are saved as a `.zip` containing the
 
 ### Keys
 
-`Space` wake/sleep · `1`–`4` select organism · `M` mute · `S` solo · `R` record
+`Space` wake/sleep · `1`–`4` select organism · `M` mute · `S` solo · `R` record · `W` wild seed
 
 ## Spatial model
 
-- Equal-power pan from the organism's left/right position, widened ×1.3
-- Interaural time difference up to 0.7 ms (scaled by Motion) on the far ear
-- Distance: dry level falls and room/echo send rises with distance; brightness falls with distance and when the source is behind the listener
-- Each organism's orbit moves it through the field on its own cycle and direction; a slight doppler shift follows radial movement
+- Each organism travels its own path (orbit), around its anchor or around the listener
+- Equal-power pan from the organism's left/right position, widened ×1.5
+- Interaural time difference up to 0.75 ms on the far ear
+- Head shadow: the far ear is lowpassed down to about 1.6 kHz at full pan
+- Rear sources lose brightness; distance lowers the dry level, raises the room/echo send and darkens the tone
+- Doppler: radial speed bends the pitch (World › Motion › Doppler)
 - Grains scatter across the stereo field by each organism's Width
 - Global M/S width on the dry bus
+
+## Gain safety
+
+Version 0.4 makes every feedback path unconditionally stable:
+- **Echo**: the return is capped at 90 %, and the saturator inside the loop has a gain of at most 1 (in 0.3 it had a small-signal gain of about 1.7, so the loop ran away from roughly 57 % return). A highpass inside the loop stops low-end build-up.
+- **Memory ring**: a slow leveller on the write keeps the granular feedback loop from growing.
+- **Master**: a fast compressor followed by a soft clipper that never exceeds −0.1 dBFS. Recordings are taken after it.
 
 ## Browser notes
 
@@ -123,4 +139,4 @@ Inside the claude.ai artifact viewer, takes are saved as a `.zip` containing the
 
 ## Sound design notes
 
-Version 0.3 returns to the folded-sine core of 0.1 and takes cues from the SOMA Lyra-8: modulators are pure sines, bond and feedback depths stay in a range where FM sounds tonal, detuned twins beat slowly, drive is warm and asymmetric, and the echo can saturate into self-oscillation with a wobbling delay line. The memory ring is lowpassed on write so the granular feedback loop stays smooth.
+Version 0.3 returns to the folded-sine core of 0.1 and takes cues from the SOMA Lyra-8: modulators are pure sines, bond and feedback depths stay in a range where FM sounds tonal, detuned twins beat slowly, drive is warm and asymmetric, and the echo saturates warmly with a wobbling delay line. Version 0.4 widens every range for extreme sounds while keeping the low end of each control musical. The memory ring is lowpassed on write so the granular feedback loop stays smooth.

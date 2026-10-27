@@ -1,4 +1,4 @@
-/* Symbiont 0.3 — sound engine.
+/* Symbiont 0.4 — sound engine.
    SymEngine is self-contained: app.js serialises it with toString() into an AudioWorklet
    module (or runs it on the main thread through a ScriptProcessor fallback).
    Do not reference anything outside the class body. */
@@ -14,8 +14,9 @@ class SymEngine {
     this.SC = { hira:[0,2,3,7,8], lyd:[0,2,4,6,7,9,11], harm:[0,2.04,3.86,5.51,7.02,8.41,9.69,10.88],
       pelog:[0,1.2,2.7,6.8,7.9], whole:[0,2,4,6,8,10], pent:[0,3,5,7,10], rast:[0,2,3.5,5,7,9,10.5], phryg:[0,1,3,5,7,8,10] };
     this.VOW = [[730,1090],[570,840],[530,1840],[300,870],[400,1700]];
+    this.SYNC = [32, 16, 8, 4, 2, 1, 0.5, 0.25];  // beats per filter-LFO cycle when synced
     this.g = { bpm:74, mutate:0.25, drift:0.3, scale:'hira', root:45, width:1.15, memFeed:0.5, freeze:0,
-      pressure:1, eco:0.3, ecoRate:0.3, motion:1 };
+      pressure:1, eco:0.3, ecoRate:0.3, motion:1, doppler:0.4 };
     this.stir = { x:0, y:0, a:0, vx:0, vy:0, spd:0 };
     // Four-species competitive Lotka–Volterra system in its chaotic regime (Vano et al. 2006)
     this.eco = { x:[0.31,0.42,0.53,0.38], r:[1,0.72,1.53,1.27],
@@ -32,7 +33,7 @@ class SymEngine {
     this.dL = new Float32Array(2048); this.dR = new Float32Array(2048);
     this.wL = new Float32Array(2048); this.wR = new Float32Array(2048);
     this.stC = 0; this.stEvery = Math.floor(sr / 30); this.gEv = []; this.trEv = []; this.ovT = 0;
-    this.dcx = 0; this.dcy = 0; this.mlp = 0; this.time = 0;
+    this.dcx = 0; this.dcy = 0; this.mlp = 0; this.menv = 0; this.mgain = 1; this.time = 0;
     for (let i = 0; i < 4; i++) this.euclid(i);
   }
 
@@ -40,20 +41,21 @@ class SymEngine {
     const a = i * Math.PI / 2 + Math.PI / 4;
     return { i, p:{ gate:1, gain:0.7, bx:Math.sin(a)*0.55, by:-Math.cos(a)*0.55, oct:0, tune:0, glide:0.2,
         body:0.45, fold:0.2, fb:0.1, ratio:2, index:0, fm:[0,0,0,0],
-        roar:0, ring:0, hum:0, sing:0,
-        fmode:0, tone:0.6, res:0.2, flRate:0.1, flDepth:0, flShape:0, flEnv:0,
-        orbShape:0, orbSpeed:0, orbDir:1, orbX:0.25, orbY:0.15, orbTilt:0,
+        roar:0, ring:0, hum:0, sing:0, crush:0,
+        fmode:0, tone:0.6, res:0.2, flRate:0.3, flSync:0, flDepth:0, flShape:0, flEnv:0, flSpace:0, flFM:0,
+        orbShape:0, orbAround:0, orbSpeed:0, orbDir:1, orbX:0.25, orbY:0.15, orbTilt:0,
         src:0, cloud:0.5, density:10, size:0.35, pos:0.3, spray:0.3, trans:0, scatter:4, rev:0.15, width:0.6, track:1,
         pulse:1, steps:16, hits:5, rot:0, div:1, prob:0.9, attack:0.004, decay:0.4, wander:0.4 },
-      pat:[], ph:Math.random(), ph2:Math.random(), ph3:Math.random(), phs:0, pht:Math.random(), sx:0, nsx:0,
+      pat:[], ph:Math.random(), ph2:Math.random(), ph3:Math.random(), phs:0, pht:Math.random(), sx:0, sxp:0, nsx:0,
       deg:0, freq:110, inc:0, inc0:0, env:0, att:0, velo:1, burst:0, step:-1, clk:0,
       s:[0,0,0,0], fs:new Float32Array(4), fa:[0,0,0,0,0,0], fsg:[0,0],
-      cb:new Float32Array(4096), cw:0, cl:100, lp:0,
-      dlL:new Float32Array(128), dlR:new Float32Array(128), dw:0, itdL:0, itdR:0, nitdL:0, nitdR:0,
-      orbPh:Math.random(), flPh:Math.random(), flC:-1, flPrev:0, flNext:0, fl:0, fc0:1000, fc1:1000,
+      cb:new Float32Array(4096), cw:0, cl:100, lp:0, chc:0, chv:0,
+      dlL:new Float32Array(128), dlR:new Float32Array(128), dw:0, itdL:0, itdR:0, nitdL:0, nitdR:0, hsL:0, hsR:0, haL:1, haR:1, nhaL:1, nhaR:1,
+      orbPh:Math.random(), wpx:0, wpy:0, wnx:0, wny:0, wc:-1,
+      flPh:Math.random(), flC:-1, flPrev:0, flNext:0, flX:0.37, fl:0, lfs:0, fnorm:0.5,
       ex:0, ey:0, pan:0, dist:0.5, prevR:-1, dop:0, vibPh:Math.random(), vowPh:Math.random(), prox:0,
       gL:0.7, gR:0.7, dG:0, wG:0, ngL:0.7, ngR:0.7, ndG:0, nwG:0, lvl:0, gacc:0,
-      dr:{ th:0, r:0, pos:0, tone:0, fold:0 }, m:new Float32Array(16) };
+      dr:{ th:0, r:0, pos:0, tone:0, fold:0 }, m:new Float32Array(18) };
   }
 
   euclid(i) {
@@ -122,11 +124,11 @@ class SymEngine {
     if (!gr) return;
     const sr = this.sr, R = Math.random;
     const sizeN = Math.max(0, Math.min(1, p.size + m[5] * 0.5));
-    const durS = 0.012 * Math.pow(100, sizeN) * (0.8 + 0.4 * R());
+    const durS = 0.008 * Math.pow(200, sizeN) * (0.8 + 0.4 * R());
     const dur = Math.max(64, Math.floor(durS * sr));
     const L = (this.SC[this.g.scale] || this.SC.hira).length;
     const k = Math.round((R() * 2 - 1) * p.scatter * L / 12);
-    const semis = p.trans + this.semi((p.track ? v.deg : 0) + k) + m[2] * 12 + p.tune + (R() - 0.5) * 0.12;
+    const semis = p.trans + this.semi((p.track ? v.deg : 0) + k) + m[2] * 12 + p.tune + v.dop + (R() - 0.5) * 0.12;
     let rate = Math.pow(2, semis / 12);
     if (R() < p.rev) rate = -rate;
     const ar = Math.abs(rate);
@@ -150,7 +152,7 @@ class SymEngine {
     }
     while (start >= len) start -= len;
     const w = Math.max(0, Math.min(1, p.width + m[8]));
-    const pan = Math.max(-1, Math.min(1, v.pan + (R() * 2 - 1) * w * 1.2));
+    const pan = Math.max(-1, Math.min(1, v.pan + (R() * 2 - 1) * w * 1.3));
     const a = (pan + 1) * Math.PI / 4;
     const overlap = dens * durS;
     let amp = p.cloud * 1.15 / Math.sqrt(Math.max(1, overlap));
@@ -165,6 +167,7 @@ class SymEngine {
     const cl = (x, a, b) => x < a ? a : x > b ? b : x;
     const ftanh = x => x < -3 ? -1 : x > 3 ? 1 : x * (27 + x * x) / (27 + 9 * x * x);
     this.time += n / sr;
+    const bdt = n / sr;
 
     // ---- ecology
     const edt = (0.0004 + g.ecoRate * g.ecoRate * 0.05) * n / 128;
@@ -177,7 +180,7 @@ class SymEngine {
 
     // ---- tides
     for (const t of this.T) {
-      t.ph += t.rate * n / sr; if (t.ph > 1e5) t.ph -= 1e5;
+      t.ph += t.rate * bdt; if (t.ph > 1e5) t.ph -= 1e5;
       for (let i = 0; i < 4; i++) {
         const p = t.ph + i * t.spread * 0.25, c = Math.floor(p), f = p - c;
         if (c !== t.last[i]) {
@@ -217,69 +220,85 @@ class SymEngine {
       v.clk += n; const sl = step16 * p.div;
       let guard = 0; while (v.clk >= sl && guard++ < 8) { v.clk -= sl; this.advance(i); }
 
-      // colour (each stage is a musical voicing, not a noise source)
       const roar = cl(p.roar + m[10] + prox * 0.3, 0, 1), ring = cl(p.ring + m[11], 0, 1);
-      const hum = cl(p.hum + m[12], 0, 1), sing = cl(p.sing + m[13], 0, 1);
-      v.roar = roar; v.ringA = ring; v.hum = hum; v.sing = sing;
+      const hum = cl(p.hum + m[12], 0, 1), sing = cl(p.sing + m[13], 0, 1), crush = cl(p.crush + m[16], 0, 1);
+      v.roar = roar; v.ringA = ring; v.hum = hum; v.sing = sing; v.crush = crush;
 
-      // ---- space: own orbit around the anchor, then global tides and drift
-      const spd = p.orbSpeed > 0 ? 0.004 * Math.pow(750, p.orbSpeed) * Math.pow(2, m[14] * 2) : 0;
-      v.orbPh += spd * p.orbDir * n / sr; if (v.orbPh > 1e4 || v.orbPh < -1e4) v.orbPh %= 1;
+      // ---- space: each organism travels its own path
+      const spd = p.orbSpeed > 0 ? 0.004 * Math.pow(2000, p.orbSpeed) * Math.pow(2, m[14] * 2) : 0;
+      v.orbPh += spd * p.orbDir * bdt; if (v.orbPh > 1e4 || v.orbPh < -1e4) { v.orbPh -= Math.floor(v.orbPh); v.wc = -1; }
       const ph = TAU * v.orbPh, ax = p.orbX, ay = p.orbY;
       let lx, ly;
-      if (p.orbShape === 1) { lx = ax * Math.sin(ph); ly = ay * Math.sin(2 * ph); }
-      else if (p.orbShape === 2) { lx = ax * Math.sin(ph); ly = ay * (0.5 - 0.5 * Math.cos(2 * ph)) - ay * 0.5; }
-      else { lx = ax * Math.cos(ph); ly = ay * Math.sin(ph); }
+      switch (p.orbShape) {
+        case 1: lx = ax * Math.sin(ph); ly = ay * Math.sin(2 * ph); break;
+        case 2: lx = ax * Math.sin(ph); ly = ay * (0.5 - 0.5 * Math.cos(2 * ph)) - ay * 0.5; break;
+        case 3: { const k = 0.15 + 0.85 * (0.5 + 0.5 * Math.sin(ph * 0.23)); lx = ax * k * Math.cos(ph); ly = ay * k * Math.sin(ph); break; }
+        case 4: {
+          const c = Math.floor(v.orbPh), f = v.orbPh - c;
+          if (c !== v.wc) {
+            v.wc = c; v.wpx = v.wnx; v.wpy = v.wny;
+            const an = Math.random() * TAU, rr = Math.sqrt(Math.random());
+            v.wnx = Math.cos(an) * rr; v.wny = Math.sin(an) * rr;
+          }
+          const e = 0.5 - 0.5 * Math.cos(Math.PI * f);
+          lx = ax * (v.wpx + (v.wnx - v.wpx) * e); ly = ay * (v.wpy + (v.wny - v.wpy) * e); break;
+        }
+        default: lx = ax * Math.cos(ph); ly = ay * Math.sin(ph);
+      }
       const tc = Math.cos(p.orbTilt), ts = Math.sin(p.orbTilt);
-      let px = p.bx + (lx * tc - ly * ts) * M, py = p.by + (lx * ts + ly * tc) * M;
+      const rx = lx * tc - ly * ts, ry = lx * ts + ly * tc;
+      let px, py;
+      if (p.orbAround) { const k = Math.min(1, M); px = p.bx + (rx - p.bx) * k; py = p.by + (ry - p.by) * k; }
+      else { px = p.bx + rx * M; py = p.by + ry * M; }
       let r0 = Math.hypot(px, py); if (r0 > 1) { px /= r0; py /= r0; r0 = 1; }
       const th0 = Math.atan2(px, -py);
       const r = cl(r0 + (m[1] * 0.6 + d.r * 0.4) * M, 0.03, 1);
       const th = th0 + (m[0] * Math.PI + d.th * 1.5) * M;
-      if (v.prevR >= 0) { const vel = (r - v.prevR) / (n / sr); v.dop += (cl(-vel * 0.6 * M, -0.5, 0.5) - v.dop) * 0.05; }
-      v.prevR = r;
-      v.ex = r * Math.sin(th); v.ey = -r * Math.cos(th); v.dist = r;
-      v.pan = cl(v.ex * 1.3, -1, 1);
+      v.ex = r * Math.sin(th); v.ey = -r * Math.cos(th);
+      if (v.prevR >= 0) { const vel = (r - v.prevR) / bdt; v.dop += (cl(-vel * g.doppler * 1.2, -3, 3) - v.dop) * 0.2; }
+      v.prevR = r; v.dist = r;
+      v.pan = cl(v.ex * 1.5, -1, 1);
       const a = (v.pan + 1) * Math.PI / 4, front = Math.cos(th);
       v.ngL = Math.cos(a); v.ngR = Math.sin(a);
-      const maxItd = 0.0007 * sr * Math.min(1.5, M);
+      const maxItd = 0.00075 * sr;
       v.nitdL = Math.max(0, v.pan) * maxItd; v.nitdR = Math.max(0, -v.pan) * maxItd;
+      // head shadow: the far ear loses its top end
+      const sh = fc => 1 - Math.exp(-TAU * fc / sr);
+      v.nhaL = v.pan > 0 ? sh(20000 * Math.pow(0.08, v.pan)) : 1;
+      v.nhaR = v.pan < 0 ? sh(20000 * Math.pow(0.08, -v.pan)) : 1;
       const ecoG = 1 + g.eco * (0.25 + 1.2 * ex[i] - 1);
       const lv = p.gain * p.gate * Math.max(0, ecoG) * cl(1 + m[15], 0, 2);
-      v.ndG = (1 - 0.8 * Math.pow(r, 1.2)) * lv;
-      v.nwG = (0.12 + 0.88 * r) * lv;
-      v.bright = (0.55 + 0.45 * (front * 0.5 + 0.5)) * (1 - 0.3 * r * Math.min(1.5, M));
+      v.ndG = (1 - 0.88 * Math.pow(r, 1.1)) * lv;
+      v.nwG = (0.08 + 1.0 * r) * lv;
+      v.bright = (0.4 + 0.6 * (front * 0.5 + 0.5)) * (1 - 0.4 * r);
 
       // ---- pitch
-      v.vibPh += (4.6 + i * 0.37) * n / sr; if (v.vibPh > 1) v.vibPh -= 1;
+      v.vibPh += (4.6 + i * 0.37) * bdt; if (v.vibPh > 1) v.vibPh -= 1;
       const vib = Math.sin(TAU * v.vibPh) * sing * 0.22;
       const bend = cl(-st.vy * prox * 1.5, -2, 2);
       const midi = g.root + 12 * p.oct + p.tune + this.semi(v.deg) + m[2] * 12 + v.dop + vib + bend;
-      const tf = 440 * Math.pow(2, (midi - 69) / 12);
-      v.freq += (tf - v.freq) * (1 - Math.exp(-n / (sr * (0.002 + p.glide * 0.6))));
+      const tf = 440 * Math.pow(2, (cl(midi, 0, 130) - 69) / 12);
+      v.freq += (tf - v.freq) * (1 - Math.exp(-n / (sr * (0.002 + p.glide * p.glide * 3))));
       v.inc0 = v.inc || v.freq / sr; v.inc = v.freq / sr;
 
-      // ---- core: sine carrier, bent by itself, its bonds and one harmonic operator
+      // ---- core: sine carrier bent by itself, its bonds and one harmonic operator
       const fold = cl(p.fold + m[9] + d.fold * 0.4, 0, 1);
-      v.drive = 1 + fold * 5; v.norm = 1 / Math.sin(Math.min(v.drive, Math.PI / 2));
-      const bs = cl(1 + m[3], 0, 2.5) * g.pressure * (1 + prox * 1.5) * (1 + g.eco * ex[i] * 0.5);
+      v.drive = 1 + Math.pow(fold, 1.5) * 14; v.norm = 1 / Math.sin(Math.min(v.drive, Math.PI / 2));
+      const bs = cl(1 + m[3], 0, 3) * g.pressure * (1 + prox * 1.5) * (1 + g.eco * ex[i] * 0.5);
       v.fk = [0, 0, 0, 0];
-      for (let j = 0; j < 4; j++) if (j !== i) v.fk[j] = p.fm[j] * 2.6 * bs;
-      v.fbk = p.fb * 1.35;
-      v.rat = p.ratio; v.idx = p.index * 2.2;
+      for (let j = 0; j < 4; j++) if (j !== i) v.fk[j] = Math.pow(p.fm[j], 1.5) * 6 * bs;
+      v.fbk = Math.pow(p.fb, 1.6) * 3.2;
+      v.rat = p.ratio; v.idx = Math.pow(p.index, 1.5) * 7;
       v.bell = ring * 2.4; v.bellFloor = 0.25;
-      // hum: a detuned twin beating against the voice, plus a sub
       v.humOn = hum > 0.002; v.twR = Math.pow(2, (4 + hum * 9) / 1200); v.twG = hum * 0.75; v.subG = hum * 0.55; v.humN = 1 / (1 + hum * 0.55);
-      // roar: warm asymmetric tube drive
-      v.roarOn = roar > 0.002; v.drv = 1 + roar * 5; v.bias = roar * 0.35; v.tb = ftanh(v.bias);
+      v.roarOn = roar > 0.002; v.drv = 1 + Math.pow(roar, 1.3) * 14; v.bias = roar * 0.35; v.tb = ftanh(v.bias);
       v.roarN = 1 / Math.max(0.3, ftanh(v.drv + v.bias) - v.tb) * 0.9;
-      // ring: string resonance tuned to the note
-      v.ringOn = ring > 0.002; v.cfb = 0.6 + ring * 0.33; v.cDamp = 0.35 + ring * 0.35; v.cl = cl(sr / v.freq, 2, 4090);
+      v.ringOn = ring > 0.002; v.cfb = 0.6 + ring * 0.35; v.cDamp = 0.35 + ring * 0.35; v.cl = cl(sr / v.freq, 2, 4090);
       v.cWet = ring * 0.55; v.cN = (1 - v.cfb) * 1.8;
-      // sing: two soft formants drifting through vowels
+      v.crushOn = crush > 0.002; v.chN = 1 + Math.floor(crush * crush * 48); v.chQ = Math.pow(2, 14 - crush * 11); v.crushMix = Math.min(1, crush * 4);
       v.singOn = sing > 0.002;
       if (v.singOn) {
-        v.vowPh += 0.05 * n / sr;
+        v.vowPh += 0.05 * bdt;
         let vp = (v.vowPh + m[7] * 0.3 + i * 0.27) * 5; vp = ((vp % 5) + 5) % 5;
         const a0 = Math.floor(vp), b0 = (a0 + 1) % 5, fr = vp - a0, kq = 1 / 4.5;
         for (let k = 0; k < 2; k++) {
@@ -293,11 +312,10 @@ class SymEngine {
       v.attC = 1 - Math.exp(-1 / (sr * Math.max(0.002, p.attack)));
       v.decC = Math.exp(-1 / (sr * Math.max(0.01, p.decay)));
 
-      // grains
       if (p.gate && p.cloud > 0.001) {
         const dens = Math.max(0.2, p.density * Math.pow(2, m[4] * 3) * (p.pulse ? 0.3 + v.env * 2.4 : 1) * (1 + prox * 5) * (1 + g.eco * ex[i] * 0.6));
-        v.gacc += dens * n / sr;
-        let c = 0; while (v.gacc >= 1 && c++ < 12) { v.gacc -= 1; this.spawn(i, (Math.random() * n) | 0, dens); }
+        v.gacc += dens * bdt;
+        let c = 0; while (v.gacc >= 1 && c++ < 14) { v.gacc -= 1; this.spawn(i, (Math.random() * n) | 0, dens); }
         if (v.burst) { v.burst = 0; const b = 2 + Math.min(6, (p.density / 10) | 0); for (let q = 0; q < b; q++) this.spawn(i, (Math.random() * n) | 0, dens + 10); }
       } else { v.gacc = 0; v.burst = 0; }
     }
@@ -308,7 +326,8 @@ class SymEngine {
       for (let i = 0; i < 4; i++) {
         const v = V[i], fk = v.fk;
         const inc = v.inc0 + (v.inc - v.inc0) * f;
-        let pm = v.fbk * v.sx + fk[0] * q0 + fk[1] * q1 + fk[2] * q2 + fk[3] * q3;
+        // averaging the last two outputs keeps strong self-feedback from hunting into noise
+        let pm = v.fbk * (v.sx + v.sxp) * 0.5 + fk[0] * q0 + fk[1] * q1 + fk[2] * q2 + fk[3] * q3;
         if (v.idx > 0) { pm += v.idx * Math.sin(TAU * v.ph2); v.ph2 += inc * v.rat; if (v.ph2 >= 1) v.ph2 -= Math.floor(v.ph2); }
         if (v.bell > 0) { pm += v.bell * (v.bellFloor + v.env) * Math.sin(TAU * v.ph3); v.ph3 += inc * 3.5; if (v.ph3 >= 1) v.ph3 -= Math.floor(v.ph3); }
         const x = Math.sin(TAU * v.ph + pm);
@@ -341,6 +360,10 @@ class SymEngine {
           const z = c * v.drv + v.bias, zz = z < -3 ? -1 : z > 3 ? 1 : z * (27 + z * z) / (27 + 9 * z * z);
           c = c + ((zz - v.tb) * v.roarN - c) * Math.min(1, v.roar * 3);
         }
+        if (v.crushOn) {
+          if (++v.chc >= v.chN) { v.chc = 0; v.chv = Math.round(c * v.chQ) / v.chQ; }
+          c = c + (v.chv - c) * v.crushMix;
+        }
         if (v.p.pulse) {
           if (v.att) { v.env += (v.velo * 1.04 - v.env) * v.attC; if (v.env >= v.velo) v.att = 0; }
           else v.env *= v.decC;
@@ -349,7 +372,7 @@ class SymEngine {
         const gl = v.gL + (v.ngL - v.gL) * f, gr = v.gR + (v.ngR - v.gR) * f;
         this.bL[i][s] = o * gl; this.bR[i][s] = o * gr;
       }
-      for (let i = 0; i < 4; i++) V[i].sx = V[i].nsx;
+      for (let i = 0; i < 4; i++) { V[i].sxp = V[i].sx; V[i].sx = V[i].nsx; }
     }
 
     // ---- grains
@@ -371,54 +394,73 @@ class SymEngine {
       gr.pos = pos; gr.t = t;
     }
 
-    // ---- moving filter, interaural delay, distance, buses
-    const dL = this.dL, dR = this.dR, wL = this.wL, wR = this.wR;
+    // ---- moving filter, interaural delay, head shadow, distance, buses
+    const dL = this.dL, dR = this.dR, wL = this.wL, wR = this.wR, L30 = Math.log2(30);
     dL.fill(0, 0, n); dR.fill(0, 0, n); wL.fill(0, 0, n); wR.fill(0, 0, n);
     for (let i = 0; i < 4; i++) {
       const v = V[i], p = v.p, m = v.m, bl = this.bL[i], br = this.bR[i], stt = v.s;
-      const DL = v.dlL, DR = v.dlR;
-      const kk = 2 - 1.85 * cl(p.res, 0, 1), bp = p.fmode === 1, bpG = kk;
-      const flRate = 0.02 * Math.pow(600, cl(p.flRate, 0, 1));
-      const baseOct = Math.log2(30) + cl(p.tone + m[7] * 0.5 + v.dr.tone * 0.5, 0, 1) * 9.5 + Math.log2(v.bright) - v.hum * 0.6 + v.sing * 0.3;
-      let a1 = 0, a2 = 0, a3 = 0, pk = 0;
+      const DL = v.dlL, DR = v.dlR, mode = p.fmode;
+      const res = cl(p.res + m[17] * 0.5, 0, 1), kk = 2 - 1.98 * Math.pow(res, 0.8);
+      const flRate = p.flSync ? (g.bpm / 60) / this.SYNC[Math.round(cl(p.flRate, 0, 1) * 7)] : 0.02 * Math.pow(2000, cl(p.flRate, 0, 1));
+      const baseOct = L30 + cl(p.tone + m[7] * 0.5 + v.dr.tone * 0.5, 0, 1) * 9.5 + Math.log2(v.bright)
+        - v.hum * 0.6 + v.sing * 0.3 + p.flSpace * (1 - v.dist * 2) * 2.5;
+      const fmA = p.flFM * p.flFM * 5, perSample = fmA > 0.001; const bpG = Math.sqrt(kk);
+      let a1 = 0, a2 = 0, a3 = 0, pk = 0, oct = baseOct;
       for (let s = 0; s < n; s++) {
         if ((s & 7) === 0) {
           const ph = v.flPh + flRate * s / sr, c = Math.floor(ph), fr = ph - c;
-          if (c !== v.flC) { v.flC = c; v.flPrev = v.flNext; v.flNext = Math.random() * 2 - 1; }
+          if (c !== v.flC) {
+            v.flC = c; v.flPrev = v.flNext;
+            if (p.flShape === 4) { let x = 3.93 * v.flX * (1 - v.flX); if (x < 0.002 || x > 0.998) x = Math.random(); v.flX = x; v.flNext = x * 2 - 1; }
+            else v.flNext = Math.random() * 2 - 1;
+          }
           let lf;
           switch (p.flShape) {
             case 1: lf = 1 - 4 * Math.abs(fr - 0.5); break;
-            case 2: lf = v.flPrev + (v.flNext - v.flPrev) * (0.5 - 0.5 * Math.cos(Math.PI * fr)); break;
+            case 2: case 4: lf = v.flPrev + (v.flNext - v.flPrev) * (0.5 - 0.5 * Math.cos(Math.PI * fr)); break;
             case 3: lf = v.flNext; break;
+            case 5: lf = 1 - 2 * fr; break;
             default: lf = Math.sin(TAU * fr);
           }
           v.fl = lf;
-          const oct = baseOct + lf * p.flDepth * 3.5 + v.env * p.flEnv * 4;
-          v.foct = v.foct === undefined ? oct : v.foct + (oct - v.foct) * 0.35;
-          const fc = cl(Math.pow(2, v.foct), 25, sr * 0.42);
-          const gg = Math.tan(Math.PI * fc / sr);
+          v.lfs += (lf * p.flDepth * 3.5 + v.env * p.flEnv * 4 - v.lfs) * (p.flShape === 3 || p.flShape === 5 ? 0.6 : 0.35);
+          oct = baseOct + v.lfs;
+          if (!perSample) {
+            const gg = Math.tan(Math.PI * cl(Math.pow(2, oct), 20, sr * 0.45) / sr);
+            a1 = 1 / (1 + gg * (gg + kk)); a2 = gg * a1; a3 = gg * a2;
+          }
+        }
+        const xl = bl[s], xr = br[s];
+        if (perSample) {
+          const gg = Math.tan(Math.PI * cl(Math.pow(2, oct + (xl + xr) * fmA), 20, sr * 0.45) / sr);
           a1 = 1 / (1 + gg * (gg + kk)); a2 = gg * a1; a3 = gg * a2;
         }
         const f = s / n;
-        let v3 = bl[s] - stt[1]; let v1 = a1 * stt[0] + a2 * v3; let v2 = stt[1] + a2 * stt[0] + a3 * v3;
-        stt[0] = 2 * v1 - stt[0]; stt[1] = 2 * v2 - stt[1]; const yl = bp ? v1 * bpG : v2;
-        v3 = br[s] - stt[3]; v1 = a1 * stt[2] + a2 * v3; v2 = stt[3] + a2 * stt[2] + a3 * v3;
-        stt[2] = 2 * v1 - stt[2]; stt[3] = 2 * v2 - stt[3]; const yr = bp ? v1 * bpG : v2;
+        let v3 = xl - stt[1]; let v1 = a1 * stt[0] + a2 * v3; let v2 = stt[1] + a2 * stt[0] + a3 * v3;
+        stt[0] = 2 * v1 - stt[0]; stt[1] = 2 * v2 - stt[1];
+        const yl = mode === 1 ? v1 * bpG : mode === 2 ? xl - kk * v1 - v2 : mode === 3 ? xl - kk * v1 : v2;
+        v3 = xr - stt[3]; v1 = a1 * stt[2] + a2 * v3; v2 = stt[3] + a2 * stt[2] + a3 * v3;
+        stt[2] = 2 * v1 - stt[2]; stt[3] = 2 * v2 - stt[3];
+        const yr = mode === 1 ? v1 * bpG : mode === 2 ? xr - kk * v1 - v2 : mode === 3 ? xr - kk * v1 : v2;
         const w = v.dw; DL[w] = yl; DR[w] = yr; v.dw = (w + 1) & 127;
         const tl = v.itdL + (v.nitdL - v.itdL) * f, tr = v.itdR + (v.nitdR - v.itdR) * f;
         let rp = w - tl; if (rp < 0) rp += 128; let ri = rp | 0, rf = rp - ri;
-        const ol = DL[ri] + (DL[(ri + 1) & 127] - DL[ri]) * rf;
+        let ol = DL[ri] + (DL[(ri + 1) & 127] - DL[ri]) * rf;
         rp = w - tr; if (rp < 0) rp += 128; ri = rp | 0; rf = rp - ri;
-        const or = DR[ri] + (DR[(ri + 1) & 127] - DR[ri]) * rf;
+        let or = DR[ri] + (DR[(ri + 1) & 127] - DR[ri]) * rf;
+        v.hsL += (ol - v.hsL) * (v.haL + (v.nhaL - v.haL) * f); ol = v.hsL;
+        v.hsR += (or - v.hsR) * (v.haR + (v.nhaR - v.haR) * f); or = v.hsR;
         const dg = v.dG + (v.ndG - v.dG) * f, wg = v.wG + (v.nwG - v.wG) * f;
         dL[s] += ol * dg; dR[s] += or * dg; wL[s] += ol * wg; wR[s] += or * wg;
         const ab = Math.max(Math.abs(ol), Math.abs(or)) * (dg + wg * 0.5); if (ab > pk) pk = ab;
         bl[s] = 0; br[s] = 0;
       }
-      v.flPh += flRate * n / sr; if (v.flPh > 1e4) { v.flPh -= Math.floor(v.flPh); v.flC = -1; }
-      if (!(stt[0] === stt[0]) || Math.abs(stt[0]) > 1e6) { stt[0] = stt[1] = stt[2] = stt[3] = 0; }
+      v.flPh += flRate * bdt; if (v.flPh > 1e4) { v.flPh -= Math.floor(v.flPh); v.flC = -1; }
+      v.fnorm = cl((oct - L30) / 9.5, 0, 1);
+      if (!(stt[0] === stt[0]) || Math.abs(stt[0]) > 1e4) { stt[0] = stt[1] = stt[2] = stt[3] = 0; }
+      if (!(v.hsL === v.hsL) || !(v.hsR === v.hsR)) { v.hsL = v.hsR = 0; v.dlL.fill(0); v.dlR.fill(0); }
       if (!(v.lp === v.lp)) { v.lp = 0; v.cb.fill(0); v.fs.fill(0); }
-      v.gL = v.ngL; v.gR = v.ngR; v.dG = v.ndG; v.wG = v.nwG; v.itdL = v.nitdL; v.itdR = v.nitdR;
+      v.gL = v.ngL; v.gR = v.ngR; v.dG = v.ndG; v.wG = v.nwG; v.itdL = v.nitdL; v.itdR = v.nitdR; v.haL = v.nhaL; v.haR = v.nhaR;
       v.lvl = Math.max(v.lvl * 0.88, pk);
     }
     const wd = g.width;
@@ -428,14 +470,18 @@ class SymEngine {
       o2[s] = ftanh(wL[s] * 0.7); o3[s] = ftanh(wR[s] * 0.7);
     }
 
-    // ---- memory ring
+    // ---- memory ring, with a leveller so the granular feedback loop can never run away
     if (!g.freeze) {
       const mem = this.mem, len = this.memLen, ov = this.ov, ovN = this.ovN, fd = g.memFeed;
       let w = this.memW;
       for (let s = 0; s < n; s++) {
         const x0 = (inL[s] + inR[s]) * 0.5 * fd;
         const y = x0 - this.dcx + 0.995 * this.dcy; this.dcx = x0; this.dcy = y;
-        this.mlp += (ftanh(y * 1.2) - this.mlp) * 0.45;
+        const ay = Math.abs(y);
+        this.menv = ay > this.menv ? this.menv + (ay - this.menv) * 0.01 : this.menv * 0.99995;
+        const tg = this.menv > 0.3 ? 0.3 / this.menv : 1;
+        this.mgain += (tg - this.mgain) * 0.001;
+        this.mlp += (ftanh(y * 1.2 * this.mgain) - this.mlp) * 0.45;
         const x = this.mlp;
         mem[w] = x;
         const b = (w * ovN / len) | 0;
@@ -451,7 +497,7 @@ class SymEngine {
     if (this.stC >= this.stEvery) {
       this.stC = 0;
       const vs = [];
-      for (let i = 0; i < 4; i++) { const v = V[i]; vs.push(v.ex, v.ey, v.lvl, v.env, v.step, v.deg, v.p.pulse, ex[i], v.fl, v.roar, v.ringA, v.hum, v.sing); }
+      for (let i = 0; i < 4; i++) { const v = V[i]; vs.push(v.ex, v.ey, v.lvl, v.env, v.step, v.deg, v.p.pulse, ex[i], v.fl, v.roar, v.ringA, v.hum, v.sing, v.fnorm, v.crush); }
       const msg = { t:'st', v:vs, g:this.gEv, tr:this.trEv, mw:this.memW / this.memLen, td:this.T.map(t => t.val.slice()) };
       if ((this.ovT++ & 1) === 0) msg.ov = this.ov.slice();
       this.emit(msg); this.gEv = []; this.trEv = [];
