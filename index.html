@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!--PWA-->
+<meta name="theme-color" content="#04070b">
+<meta name="description" content="Symbiont 0.3 — a generative feedback / FM / granular instrument built as an ecosystem.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Symbiont">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<!--/PWA-->
+<!--HEAD-->
+<title>Symbiont</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Azeret+Mono:wght@300;400;500&display=swap">
+<!--/HEAD-->
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!--BODY-->
+<canvas id="field" aria-label="Symbiont listening field"></canvas>
+
+<header class="bar">
+  <div class="brand"><span class="logo">symbiont <sup class="ver" id="ver">0.3</sup></span><span class="stat" id="stat">dormant</span></div>
+  <div class="acts">
+    <button class="btn wake" id="wake">Wake</button>
+    <button class="btn" id="seedBtn" title="Grow a new ecosystem">Seed</button>
+    <button class="btn" id="freezeBtn" title="Stop writing into the memory ring">Freeze</button>
+    <button class="btn rec" id="recBtn" title="Record the master output">Rec</button>
+  </div>
+</header>
+
+<aside id="panel">
+  <div class="mix" id="mix"></div>
+  <div class="master" aria-label="Master output">
+    <canvas id="scope" aria-label="Master oscilloscope"></canvas>
+    <canvas id="lrm" aria-label="Master stereo level"></canvas>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div class="page" id="pg"></div>
+</aside>
+
+<div class="takes" id="takes"></div>
+<p class="hint"><b>Drag</b> an organism to move the centre of its orbit · <b>drag empty space</b> to stir whatever is near · <b>scroll</b> over an organism for gain · <b>double-click</b> to solo · <b>shift-drag</b> onto another to bond · <b>drop audio</b> to feed it</p>
+<div id="drop" hidden>feed this organism</div>
+<input type="file" id="file" accept="audio/*" hidden>
+<!--/BODY-->
+<script src="js/engine.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
