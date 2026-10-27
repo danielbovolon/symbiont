@@ -1,12 +1,12 @@
 /* Symbiont — host: state, audio graph, console, radar, recorder. */
 'use strict';
 
-const VERSION = '0.4';
+const VERSION = '0.5';
 const COLS = ['#7fe7dc', '#ff8fa0', '#ffc56b', '#b8a4ff'];
 const RGB = COLS.map(h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16)));
 const NAMES = ['a', 'b', 'c', 'd'];
 const SCALES = [['hira','Hirajoshi'],['lyd','Lydian'],['harm','Harmonic'],['pelog','Pelog'],['phryg','Phrygian'],['whole','Whole tone'],['pent','Pentatonic'],['rast','Rast']];
-const TARGETS = ['Orbit','Depth','Pitch','Bonds','Density','Grain size','Position','Cutoff','Width','Sharp','Roar','Ring','Hum','Sing','Orbit speed','Gain','Crush','Resonance'];
+const TARGETS = ['Orbit','Depth','Pitch','Bonds','Density','Grain size','Position','Cutoff','Width','Fold','Drive','Ring','Hum','Sing','Orbit speed','Gain','Crush','Resonance','FM amount','Self-feedback'];
 const SHAPES = ['Sine','Tri','Saw','Drift','Step','Chaos','Ecology','Follow'];
 const DIVS = [[0.5,'1/32'],[1,'1/16'],[1.5,'1/16·'],[2,'1/8'],[3,'1/8·'],[4,'1/4']];
 const COLOURS = ['roar', 'ring', 'hum', 'sing'];
@@ -22,9 +22,10 @@ const store = { get(k, d) { try { const v = localStorage.getItem('symbiont.' + k
 function voice(o) {
   return Object.assign({ gate:1, gain:0.7, bx:0, by:0, oct:0, tune:0, glide:0.2,
     body:0.45, fold:0.2, fb:0.1, ratio:2, index:0, fm:[0,0,0,0],
+    fmFb:0, fmEnv:0, fbTime:0, bondAmt:1, dType:0, leap:0,
     roar:0, ring:0, hum:0, sing:0, crush:0,
-    fmode:0, tone:0.6, res:0.2, flRate:0.3, flSync:0, flDepth:0, flShape:0, flEnv:0, flSpace:0, flFM:0,
-    orbShape:0, orbAround:0, orbSpeed:0, orbDir:1, orbX:0.25, orbY:0.15, orbTilt:0,
+    fmode:0, tone:0.6, res:0.2, keyTrk:0, flRate:0.3, flSync:0, flDepth:0, flShape:0, flEnv:0, flSpace:0, flFM:0,
+    orbShape:0, orbAround:0, orbSpeed:0, orbDir:1, orbX:0.25, orbY:0.15, orbTilt:0, orbSwing:0, orbBreath:0, orbJump:0,
     src:0, cloud:0.5, density:10, size:0.35, pos:0.3, spray:0.3, trans:0, scatter:4, rev:0.15, width:0.6, track:1,
     pulse:1, steps:16, hits:5, rot:0, div:1, prob:0.9, attack:0.004, decay:0.4, wander:0.4 }, o);
 }
@@ -40,26 +41,26 @@ function initialState() {
     v: [
       voice({ bx:p[0][0], by:p[0][1], oct:-2, pulse:0, hum:0.6, body:0.55, fold:0.2, fb:0.1, glide:0.45, attack:1.5,
         tone:0.5, res:0.35, flRate:0.18, flDepth:0.4, flShape:0, flSpace:0.3,
-        orbShape:0, orbSpeed:0.3, orbDir:-1, orbX:0.35, orbY:0.2, orbTilt:20 * D2R,
+        orbShape:0, orbSpeed:0.45, orbDir:-1, orbX:0.4, orbY:0.25, orbTilt:20 * D2R, orbSwing:0.3, orbBreath:0.4,
         cloud:0.35, density:5, size:0.72, pos:0.5, spray:0.4, trans:12, scatter:5, width:0.8, steps:9, hits:0, wander:0.5, fm:[0,0,0,0.18] }),
-      voice({ bx:p[1][0], by:p[1][1], oct:0, pulse:1, roar:0.25, body:0.42, fold:0.45, fb:0.05, ratio:2, index:0.25,
+      voice({ bx:p[1][0], by:p[1][1], oct:0, pulse:1, roar:0.3, body:0.42, fold:0.45, fb:0.05, ratio:2, index:0.35, fmEnv:0.6, leap:1,
         fmode:1, tone:0.55, res:0.55, flRate:0.4, flSync:1, flDepth:0.45, flShape:1, flEnv:0.35,
-        orbShape:0, orbAround:1, orbSpeed:0.38, orbDir:1, orbX:0.7, orbY:0.7, orbTilt:0,
+        orbShape:0, orbAround:1, orbSpeed:0.55, orbDir:1, orbX:0.75, orbY:0.75, orbTilt:0, orbSwing:0.55, orbBreath:0.45,
         density:16, size:0.28, pos:0.2, spray:0.25, cloud:0.55, scatter:7, rev:0.2, width:0.5, steps:16, hits:5, decay:0.35, wander:0.45, fm:[0.25,0,0,0] }),
       voice({ bx:p[2][0], by:p[2][1], oct:1, pulse:1, ring:0.55, body:0.42, fold:0.05, fb:0.25,
         tone:0.75, res:0.3, flRate:0.62, flDepth:0.3, flShape:3,
-        orbShape:1, orbAround:1, orbSpeed:0.45, orbDir:-1, orbX:0.8, orbY:0.55, orbTilt:-15 * D2R,
+        orbShape:1, orbAround:1, orbSpeed:0.6, orbDir:-1, orbX:0.85, orbY:0.6, orbTilt:-15 * D2R, orbJump:0.5, orbSwing:0.3,
         density:8, size:0.2, pos:0.05, spray:0.15, cloud:0.4, scatter:12, rev:0.35, width:1, steps:12, hits:4, rot:2, div:2, decay:1.4, prob:0.8, wander:0.6, fm:[0,0.15,0,0] }),
       voice({ bx:p[3][0], by:p[3][1], oct:-1, pulse:0, sing:0.6, hum:0.2, body:0.4, fold:0.25, attack:2.5,
         tone:0.62, res:0.2, flRate:0.25, flDepth:0.55, flShape:2,
-        orbShape:4, orbSpeed:0.42, orbDir:1, orbX:0.6, orbY:0.6, orbTilt:0,
+        orbShape:4, orbSpeed:0.6, orbDir:1, orbX:0.75, orbY:0.75, orbTilt:0, orbBreath:0.5,
         density:26, size:0.6, pos:0.42, spray:0.6, cloud:0.6, trans:-5, scatter:2, rev:0.4, width:0.95, steps:7, hits:0, wander:0.3, fm:[0,0,0.12,0] })
     ],
     ch: [0, 1, 2, 3].map(() => ({ mute:0, solo:0 })),
     g: { bpm:74, mutate:0.25, drift:0.3, scale:'hira', root:45, width:1.15, memFeed:0.5, freeze:0, pressure:1, eco:0.3, ecoRate:0.3, motion:1, doppler:0.4 },
     sp: { room:5.5, roomLvl:0.55, echo:0.46, echoFb:0.4, echoLvl:0.3, wob:0.3, wobRate:0.3, drive:0.15, master:0.85 },
     t: [
-      { rate:0.02, shape:0, target:0, depth:0.12, spread:1, mask:[1,1,1,1] },
+      { rate:0.03, shape:0, target:0, depth:0.25, spread:1, mask:[1,1,1,1] },
       { rate:0.8, shape:5, target:4, depth:0.4, spread:0.8, mask:[0,1,0,1] },
       { rate:0.04, shape:1, target:1, depth:0.25, spread:0.5, mask:[1,1,1,1] },
       { rate:0.07, shape:3, target:3, depth:0.35, spread:0.7, mask:[1,1,1,1] }
@@ -345,19 +346,20 @@ const cv = document.getElementById('field'), cx2 = cv.getContext('2d');
 const trail = document.createElement('canvas'), tx2 = trail.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const phoneMQ = matchMedia('(max-width: 820px)');
 function resize() {
-  W = innerWidth; H = innerHeight; DPR = Math.min(window.devicePixelRatio || 1, W < 820 ? 1.5 : 2);
+  W = cv.clientWidth || innerWidth; H = cv.clientHeight || innerHeight; DPR = Math.min(window.devicePixelRatio || 1, phoneMQ.matches ? 1.5 : 2);
   for (const c of [cv, trail]) { c.width = Math.round(W * DPR); c.height = Math.round(H * DPR); }
   cx2.setTransform(DPR, 0, 0, DPR, 0, 0); tx2.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
-addEventListener('resize', resize); resize();
+addEventListener('resize', resize); if (phoneMQ.addEventListener) phoneMQ.addEventListener('change', () => setTimeout(resize, 50)); resize();
 const panel = document.getElementById('panel');
 let GEO = { cx:0, cy:0, R:100, sc:1 };
 function geom() {
-  const mobile = W <= 820; let cx, cy, R;
-  if (mobile) {
-    const ph = panel.getBoundingClientRect().height, top = 84, avail = Math.max(150, H - ph - top - 8);
-    cx = W / 2; cy = top + avail / 2; R = Math.max(64, Math.min(W * 0.4, avail * 0.41));
+  if (cv.clientWidth !== W || cv.clientHeight !== H) resize();
+  let cx, cy, R;
+  if (phoneMQ.matches) {
+    cx = W / 2; cy = H / 2; R = Math.max(64, Math.min(W * 0.4, H * 0.41));
   } else {
     const aw = W - panel.offsetWidth - 28; cx = aw / 2 + 6; cy = H / 2 + 14; R = Math.min(aw, H) * 0.36;
   }
@@ -667,8 +669,14 @@ function sendStir(a) {
   const [fx, fy] = toField(stirP.sx, stirP.sy);
   send({ t:'stir', x:fx, y:fy, a, vx:stirP.vx, vy:stirP.vy, spd:stirP.spd });
 }
+const loc = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+// phones: a touch on an organism drags it; a touch on empty space scrolls the page vertically or stirs sideways
+cv.addEventListener('touchstart', e => {
+  const t = e.touches[0]; if (!t) return;
+  const [x, y] = loc(t); if (hitOrg(x, y) >= 0) e.preventDefault();
+}, { passive:false });
 cv.addEventListener('pointerdown', e => {
-  const x = e.clientX, y = e.clientY;
+  const [x, y] = loc(e);
   cv.setPointerCapture(e.pointerId);
   const i = hitOrg(x, y);
   if (i >= 0) {
@@ -684,7 +692,7 @@ cv.addEventListener('pointerdown', e => {
   if (Math.hypot(fx, fy) < 1.2) { drag = { mode:'stir' }; stirP = { sx:x, sy:y, vx:0, vy:0, spd:0, t:performance.now() }; sendStir(1); }
 });
 cv.addEventListener('pointermove', e => {
-  const x = e.clientX, y = e.clientY;
+  const [x, y] = loc(e);
   if (!drag) { cv.style.cursor = hitOrg(x, y) >= 0 ? 'grab' : 'crosshair'; return; }
   if (drag.mode === 'stir') {
     const now = performance.now(), dtt = Math.max(8, now - stirP.t) / 1000;
@@ -710,15 +718,15 @@ function endDrag(e) {
   if (!drag) return;
   if (drag.mode === 'stir') { sendStir(0); stirP = null; }
   else if (drag.mode === 'bond') {
-    const j = hitOrg(e.clientX, e.clientY);
-    if (j >= 0 && j !== drag.i) { const p = S.v[j]; p.fm[drag.i] = p.fm[drag.i] > 0.005 ? 0 : 0.3; send({ t:'v', i:j, k:'fm', j:drag.i, val:p.fm[drag.i] }); select(j); openSec('bonds'); }
+    const j = hitOrg(...loc(e));
+    if (j >= 0 && j !== drag.i) { const p = S.v[j]; p.fm[drag.i] = p.fm[drag.i] > 0.005 ? 0 : 0.3; send({ t:'v', i:j, k:'fm', j:drag.i, val:p.fm[drag.i] }); select(j); openSec('drive'); }
   } else if (drag.mode === 'move' && !drag.moved) select(drag.i);
   drag = null;
 }
 cv.addEventListener('pointerup', endDrag);
 cv.addEventListener('pointercancel', () => { if (drag && drag.mode === 'stir') { sendStir(0); stirP = null; } drag = null; });
 cv.addEventListener('wheel', e => {
-  const i = hitOrg(e.clientX, e.clientY); if (i < 0) return;
+  const i = hitOrg(...loc(e)); if (i < 0) return;
   e.preventDefault(); setGainPos(i, posOf(S.v[i].gain) - e.deltaY * 0.0009);
 }, { passive:false });
 
@@ -753,8 +761,9 @@ addEventListener('dragleave', e => { if (!e.relatedTarget) dropEl.hidden = true;
 addEventListener('drop', e => {
   e.preventDefault(); dropEl.hidden = true;
   const f = e.dataTransfer.files[0]; if (!f) return;
-  let i = hitOrg(e.clientX, e.clientY);
-  if (i < 0) { let bd = 1e9; for (let k = 0; k < 4; k++) { const [X, Y] = toScreen(vis[k].x, vis[k].y), d = Math.hypot(X - e.clientX, Y - e.clientY); if (d < bd) { bd = d; i = k; } } }
+  const [ex, ey] = loc(e);
+  let i = hitOrg(ex, ey);
+  if (i < 0) { let bd = 1e9; for (let k = 0; k < 4; k++) { const [X, Y] = toScreen(vis[k].x, vis[k].y), d = Math.hypot(X - ex, Y - ey); if (d < bd) { bd = d; i = k; } } }
   loadFile(f, i);
 });
 
@@ -782,6 +791,11 @@ function slider(spec, get, set) {
     inp.style.setProperty('--tr', `linear-gradient(90deg, var(--faint) ${a}%, var(--acc) ${a}% ${b}%, var(--faint) ${b}%)`);
   };
   inp.addEventListener('input', () => { set(fromT(inp.value / 1000)); paint(); });
+  // a swipe that turns into page scrolling must not leave the value changed
+  let touchStartVal = null;
+  inp.addEventListener('pointerdown', e => { touchStartVal = e.pointerType === 'touch' ? get() : null; });
+  inp.addEventListener('pointercancel', () => { if (touchStartVal !== null) { set(touchStartVal); paint(); touchStartVal = null; } });
+  inp.addEventListener('pointerup', () => { touchStartVal = null; });
   inp.addEventListener('dblclick', () => { if (spec.def != null) { set(spec.def); paint(); } });
   h.append(lb, out); w.append(h, inp); paint();
   refs.push(paint);
@@ -836,7 +850,14 @@ function buildMixer() {
     ms.append(bm, bs);
     s.append(h, fdr, db, flt, ms); mixEl.append(s);
     let fdDrag = null;
-    fd.addEventListener('pointerdown', e => { fd.setPointerCapture(e.pointerId); fdDrag = { y:e.clientY, t:posOf(S.v[i].gain) }; e.preventDefault(); });
+    // on touch screens only the cap grabs, so a swipe over the rest of the strip scrolls the page
+    const nearCap = y => { const r = fd.getBoundingClientRect(), cy = r.bottom - posOf(S.v[i].gain) * r.height; return Math.abs(y - cy) < 22; };
+    fd.addEventListener('touchstart', e => { if (e.touches[0] && nearCap(e.touches[0].clientY)) e.preventDefault(); }, { passive:false });
+    fd.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch' && !nearCap(e.clientY)) return;
+      fd.setPointerCapture(e.pointerId); fdDrag = { y:e.clientY, t:posOf(S.v[i].gain) }; e.preventDefault();
+    });
+    fd.addEventListener('pointercancel', () => { fdDrag = null; });
     fd.addEventListener('pointermove', e => { if (!fdDrag) return; const hgt = fd.clientHeight; setGainPos(i, fdDrag.t - (e.clientY - fdDrag.y) / hgt * (e.shiftKey ? 0.25 : 1)); });
     fd.addEventListener('pointerup', () => { fdDrag = null; });
     fd.addEventListener('dblclick', () => setGainPos(i, posOf(0.7)));
@@ -874,7 +895,7 @@ function paintMeters(dt) {
     k.db.textContent = z.hold > -60 ? fmtDb(z.hold) : fmtDb(dbOf(S.v[i].gain));
     k.db.classList.toggle('clip', z.hold > -0.3);
     k.pi.style.width = (clamp(z.pop, 0, 1.2) / 1.2 * 100) + '%';
-    const p = S.v[i], base = clamp(p.tone, 0, 1), span = p.flDepth * 3.5 / 9.5;
+    const p = S.v[i], base = clamp(p.tone, 0, 1), span = p.flDepth * 6 / 9.5;
     k.fRng.style.left = (clamp(base - span, 0, 1) * 100) + '%'; k.fRng.style.right = ((1 - clamp(base + span, 0, 1)) * 100) + '%';
     k.fDot.style.left = ((running ? z.fn : base) * 100) + '%';
   });
@@ -914,28 +935,55 @@ function render() {
   const top = pg.scrollTop; pg.innerHTML = '';
   const i = sel, sv = k => v => setV(i, k, v), gv = k => () => S.v[i][k];
   if (tab === 'org') {
-    pg.append(section('voice', 'voice', 'pitch · shape · fm', b => {
+    pg.append(section('voice', 'voice', 'pitch · level', b => {
       const two = el('div', 'two');
       two.append(
-        slider({ l:'Octave', min:-4, max:3, step:1, fmt:v => (v > 0 ? '+' : '') + v, def:0 }, gv('oct'), sv('oct')),
+        slider({ l:'Octave', min:-4, max:4, step:1, fmt:v => (v > 0 ? '+' : '') + v, def:0 }, gv('oct'), sv('oct')),
+        slider({ l:'Octave leap', min:0, max:3, step:1, fmt:v => v ? '±' + v + ' oct' : 'off', def:0, tip:'Each new note may jump up or down by whole octaves' }, gv('leap'), sv('leap')),
         slider({ l:'Fine tune', min:-1, max:1, bip:1, fmt:v => (v > 0 ? '+' : '') + Math.round(v * 100) + ' ct', def:0 }, gv('tune'), sv('tune')),
-        slider({ l:'Body', min:0, max:1, fmt:pct, def:0.45, tip:'Level of the oscillator against its grain cloud' }, gv('body'), sv('body')),
         slider({ l:'Glide', min:0, max:1, fmt:v => sec(0.002 + v * v * 3), def:0.2 }, gv('glide'), sv('glide')),
-        slider({ l:'Sharp', min:0, max:1, fmt:pct, def:0.2, tip:'Folds the sine into richer harmonics; the top quarter gets wild' }, gv('fold'), sv('fold')),
-        slider({ l:'Self-bend', min:0, max:1, fmt:pct, def:0.1, tip:'Feedback FM of the voice into itself; above 70% it tips into chaos' }, gv('fb'), sv('fb')),
-        slider({ l:'Harmonic FM', min:0, max:1, fmt:pct, def:0 }, gv('index'), sv('index'))
+        slider({ l:'Body', min:0, max:1, fmt:pct, def:0.45, tip:'Level of the oscillator against its grain cloud' }, gv('body'), sv('body'))
       );
       b.append(two);
-      b.append(chips('Harmonic ratio', [[0.5, '×½'], [1, '×1'], [2, '×2'], [3, '×3'], [4, '×4'], [5, '×5'], [7, '×7']], gv('ratio'), sv('ratio')));
     }));
-    pg.append(section('colour', 'colour', 'roar · ring · hum · sing', b => {
-      const two = el('div', 'two');
+    pg.append(section('drive', 'fm · feedback · drive', 'the engine', b => {
+      b.append(el('span', 'grp', 'FM'));
+      const fm = el('div', 'two');
+      fm.append(
+        slider({ l:'FM amount', min:0, max:1, fmt:pct, def:0, tip:'Depth of the FM operator on this voice' }, gv('index'), sv('index')),
+        slider({ l:'FM ratio', min:0.25, max:8, exp:1, fmt:v => '×' + v.toFixed(2), def:2, tip:'Whole numbers sound harmonic, anything between sounds like metal and bells' }, gv('ratio'), sv('ratio')),
+        slider({ l:'FM feedback', min:0, max:1, fmt:pct, def:0, tip:'The operator modulates itself: from bright to saw-like to noise' }, gv('fmFb'), sv('fmFb')),
+        slider({ l:'FM follows hits', min:0, max:1, fmt:pct, def:0, tip:'The FM opens with each hit and closes as it decays' }, gv('fmEnv'), sv('fmEnv'))
+      );
+      b.append(fm);
+      b.append(chips(null, [[0.5, '×½'], [1, '×1'], [1.5, '×1.5'], [2, '×2'], [3, '×3'], [3.5, '×3.5'], [5, '×5'], [7, '×7']], gv('ratio'), sv('ratio')));
+      b.append(el('span', 'grp', 'Feedback'));
+      const fbg = el('div', 'two');
+      fbg.append(
+        slider({ l:'Self-feedback', min:0, max:1, fmt:pct, def:0.1, tip:'The voice bends its own phase; above 70% it tips into chaos' }, gv('fb'), sv('fb')),
+        slider({ l:'Feedback time', min:0, max:1, fmt:v => v < 0.003 ? 'instant' : (1 + v * v * 960) / 48 < 1 ? ((1 + v * v * 960) / 48).toFixed(2) + ' ms' : ((1 + v * v * 960) / 48).toFixed(1) + ' ms', def:0, tip:'Delays the self-feedback: short times sound like combs, longer ones like chaotic engines' }, gv('fbTime'), sv('fbTime')),
+        slider({ l:'Bond depth', min:0, max:3, fmt:v => '×' + v.toFixed(2), def:1, tip:'Scales every bond that reaches this organism' }, gv('bondAmt'), sv('bondAmt'))
+      );
+      b.append(fbg);
+      const bonds = el('div', 'three');
+      for (let j = 0; j < 4; j++) if (j !== i) bonds.append(slider({ l:`${NAMES[j].toUpperCase()} → ${NAMES[i].toUpperCase()}`, min:0, max:1, fmt:pct, def:0, tip:`How much ${NAMES[j].toUpperCase()} bends ${NAMES[i].toUpperCase()}` }, () => S.v[i].fm[j], v => { S.v[i].fm[j] = v; send({ t:'v', i, k:'fm', j, val:v }); }));
+      b.append(bonds);
+      b.append(el('span', 'grp', 'Distortion'));
+      b.append(chips(null, [[0, 'Tube'], [1, 'Fuzz'], [2, 'Fold'], [3, 'Rectify']], gv('dType'), sv('dType')));
+      const dist = el('div', 'two');
+      dist.append(
+        slider({ l:'Drive', min:0, max:1, fmt:pct, def:0 }, gv('roar'), sv('roar')),
+        slider({ l:'Wavefold', min:0, max:1, fmt:pct, def:0.2, tip:'Folds the sine into richer harmonics before the drive' }, gv('fold'), sv('fold')),
+        slider({ l:'Crush', min:0, max:1, fmt:v => v < 0.003 ? 'off' : Math.round(14 - v * 11) + ' bit · ÷' + (1 + Math.floor(v * v * 48)), def:0, tip:'Sample-rate and bit reduction' }, gv('crush'), sv('crush'))
+      );
+      b.append(dist);
+    }));
+    pg.append(section('colour', 'colour', 'ring · hum · sing', b => {
+      const two = el('div', 'three');
       two.append(
-        slider({ l:'Roar', min:0, max:1, fmt:pct, def:0, tip:'Warm asymmetric tube drive' }, gv('roar'), sv('roar')),
         slider({ l:'Ring', min:0, max:1, fmt:pct, def:0, tip:'Bell partials that open with each hit, plus a string resonance on the note' }, gv('ring'), sv('ring')),
         slider({ l:'Hum', min:0, max:1, fmt:pct, def:0, tip:'A detuned twin that beats slowly against the voice, and a sub octave' }, gv('hum'), sv('hum')),
-        slider({ l:'Sing', min:0, max:1, fmt:pct, def:0, tip:'Vibrato and two soft formants drifting through vowels' }, gv('sing'), sv('sing')),
-        slider({ l:'Crush', min:0, max:1, fmt:v => v < 0.003 ? 'off' : Math.round(14 - v * 11) + ' bit · ÷' + (1 + Math.floor(v * v * 48)), def:0, tip:'Sample-rate and bit reduction' }, gv('crush'), sv('crush'))
+        slider({ l:'Sing', min:0, max:1, fmt:pct, def:0, tip:'Vibrato and two soft formants drifting through vowels' }, gv('sing'), sv('sing'))
       );
       b.append(two);
     }));
@@ -945,14 +993,15 @@ function render() {
       const SYNCL = ['8 bars', '4 bars', '2 bars', '1 bar', '1/2', '1/4', '1/8', '1/16'];
       two.append(
         slider({ l:'Cutoff', min:0, max:1, fmt:v => hz(30 * Math.pow(2, v * 9.5)), def:0.6 }, gv('tone'), sv('tone')),
-        slider({ l:'Resonance', min:0, max:1, fmt:v => v > 0.93 ? 'scream' : pct(v), def:0.2 }, gv('res'), sv('res'))
+        slider({ l:'Resonance', min:0, max:1, fmt:v => v > 0.93 ? 'scream' : pct(v), def:0.2 }, gv('res'), sv('res')),
+        slider({ l:'Key track', min:0, max:1, fmt:pct, def:0, tip:'Cutoff follows the note, so octave leaps move the filter too' }, gv('keyTrk'), sv('keyTrk'))
       );
       b.append(two);
       const mod = el('div', 'two');
       mod.append(
         slider({ l:'LFO rate', min:0, max:1, fmt:v => S.v[i].flSync ? SYNCL[Math.round(v * 7)] : period(0.02 * Math.pow(2000, v)), def:0.3 }, gv('flRate'), sv('flRate')),
-        slider({ l:'LFO depth', min:0, max:1, fmt:v => '±' + (v * 3.5).toFixed(1) + ' oct', def:0 }, gv('flDepth'), sv('flDepth')),
-        slider({ l:'Env → cutoff', min:-1, max:1, bip:1, fmt:v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 4).toFixed(1) + ' oct', def:0 }, gv('flEnv'), sv('flEnv')),
+        slider({ l:'LFO depth', min:0, max:1, fmt:v => '±' + (v * 6).toFixed(1) + ' oct', def:0 }, gv('flDepth'), sv('flDepth')),
+        slider({ l:'Env → cutoff', min:-1, max:1, bip:1, fmt:v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 6).toFixed(1) + ' oct', def:0 }, gv('flEnv'), sv('flEnv')),
         slider({ l:'Near → bright', min:-1, max:1, bip:1, fmt:v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 2.5).toFixed(1) + ' oct', def:0, tip:'Cutoff follows distance: positive opens it as the organism comes close, negative as it moves away' }, gv('flSpace'), sv('flSpace')),
         slider({ l:'Audio FM', min:0, max:1, fmt:v => v < 0.003 ? 'off' : pct(v), def:0, tip:'The organism modulates its own cutoff at audio rate: snarls, growls, metallic edges' }, gv('flFM'), sv('flFM'))
       );
@@ -980,12 +1029,15 @@ function render() {
         slider({ l:'Axis Y', min:0, max:1, fmt:pct, def:0.15 }, gv('orbY'), sv('orbY'))
       );
       b.append(two);
+      b.append(el('span', 'grp', 'Travel'));
+      const tr = el('div', 'three');
+      tr.append(
+        slider({ l:'Swing', min:0, max:1, fmt:pct, def:0, tip:'Speeds up and slows down on its own; above 40% it sometimes turns back' }, gv('orbSwing'), sv('orbSwing')),
+        slider({ l:'Breathe', min:0, max:1, fmt:pct, def:0, tip:'The path swells and shrinks: the sound comes close, then drifts far away' }, gv('orbBreath'), sv('orbBreath')),
+        slider({ l:'Jump', min:0, max:1, fmt:pct, def:0, tip:'Pulse hits may throw the organism to another point of its path' }, gv('orbJump'), sv('orbJump'))
+      );
+      b.append(tr);
       b.append(el('p', 'lede', 'Around the listener, the organism circles you, passing behind your head; drag it in or out to set the radius. Wander flies to random points inside its area. World › Motion scales every path and sets the doppler.'));
-    }));
-    pg.append(section('bonds', 'bonds', 'who bends ' + NAMES[i], b => {
-      const three = el('div', 'three');
-      for (let j = 0; j < 4; j++) if (j !== i) three.append(slider({ l:`${NAMES[j].toUpperCase()} → ${NAMES[i].toUpperCase()}`, min:0, max:1, fmt:pct, def:0 }, () => S.v[i].fm[j], v => { S.v[i].fm[j] = v; send({ t:'v', i, k:'fm', j, val:v }); }));
-      b.append(three);
     }));
     pg.append(section('cloud', 'cloud', 'grains', b => {
       b.append(chips('Grain source', [[0, 'Memory ring'], [1, S.files[i] ? 'Recording · ' + S.files[i] : 'Recording…']], gv('src'), v => {
@@ -1175,14 +1227,17 @@ function seed(wild) {
     const [bx, by] = polar(off + i * 90 + rnd(-35, 35), rnd(0.25, 0.75));
     const steps = pick([5, 7, 8, 9, 11, 12, 13, 16]);
     const fm = [0, 1, 2, 3].map(j => j !== i && Math.random() < x(0.35, 0.6) ? rnd(0.05, x(0.4, 0.85)) : 0);
-    const col = { roar:0, ring:0, hum:0, sing:0, crush: W && Math.random() < 0.4 ? rnd(0.2, 0.8) : 0 }; col[cols[i]] = rnd(0.35, x(0.8, 1)); if (Math.random() < 0.5) { const k2 = pick(COLOURS); col[k2] = Math.max(col[k2], rnd(0, 0.35)); }
+    const col = { roar:0, ring:0, hum:0, sing:0, crush: W && Math.random() < 0.4 ? rnd(0.2, 0.8) : 0 }; if (W && Math.random() < 0.5) col.roar = rnd(0.3, 1); col[cols[i]] = rnd(0.35, x(0.8, 1)); if (Math.random() < 0.5) { const k2 = pick(COLOURS); col[k2] = Math.max(col[k2], rnd(0, 0.35)); }
     const pulse = Math.random() < 0.2 ? 1 - pulses[i] : pulses[i];
     return voice(Object.assign({ bx, by, gate:old.gate, gain:old.gain, src: S.files[i] && Math.random() < 0.7 ? 1 : 0, pulse,
       oct: pick([-2, -1, -1, 0, 0, 1]), tune: Math.random() < 0.3 ? rnd(-0.15, 0.15) : 0, body: rnd(0.3, 0.6), fold: rnd(0, x(0.6, 1)), fb: Math.random() < 0.5 ? rnd(0, x(0.4, 0.9)) : 0,
       ratio: pick([0.5, 1, 2, 2, 3, 4, 5, 7]), index: Math.random() < x(0.5, 0.7) ? rnd(0, x(0.45, 0.9)) : 0,
       fmode: pick([0, 0, 0, 1, 1, 2, 3]), tone: rnd(0.45, 0.8), res: rnd(0.05, x(0.6, 0.97)), flRate: rnd(0.05, x(0.7, 0.9)), flSync: Math.random() < 0.4 ? 1 : 0, flDepth: Math.random() < 0.85 ? rnd(0.15, x(0.6, 0.95)) : 0,
       flShape: (Math.random() * 6) | 0, flEnv: pulse ? rnd(0, 0.6) : 0, flSpace: Math.random() < 0.5 ? rnd(-0.6, 0.8) : 0, flFM: W && Math.random() < 0.4 ? rnd(0.1, 0.7) : 0,
-      orbAround: Math.random() < x(0.4, 0.7) ? 1 : 0, orbShape: (Math.random() * 5) | 0, orbSpeed: Math.random() < 0.9 ? rnd(0.2, x(0.6, 0.95)) : 0, orbDir: pick([-1, 1]), orbTilt: rnd(-90, 90) * D2R,
+      dType: W ? (Math.random() * 4) | 0 : pick([0, 0, 0, 2]), leap: Math.random() < x(0.3, 0.6) ? pick([1, 1, 2, 3]) : 0, fmFb: Math.random() < x(0.3, 0.6) ? rnd(0, x(0.4, 0.9)) : 0,
+      fmEnv: pulse ? rnd(0, 0.9) : 0, fbTime: Math.random() < x(0.2, 0.5) ? rnd(0.05, 0.8) : 0, bondAmt: x(1, rnd(1, 2.5)), keyTrk: Math.random() < 0.4 ? rnd(0.3, 1) : 0,
+      orbSwing: Math.random() < 0.7 ? rnd(0.1, x(0.6, 1)) : 0, orbBreath: Math.random() < 0.7 ? rnd(0.1, 0.8) : 0, orbJump: pulse && Math.random() < x(0.3, 0.6) ? rnd(0.2, 0.8) : 0,
+      orbAround: Math.random() < x(0.4, 0.7) ? 1 : 0, orbShape: (Math.random() * 5) | 0, orbSpeed: Math.random() < 0.92 ? rnd(0.3, x(0.68, 0.95)) : 0, orbDir: pick([-1, 1]), orbTilt: rnd(-90, 90) * D2R,
       glide: rnd(0, 0.6), attack: pulse ? 0.002 * Math.pow(20, Math.random()) : rnd(0.3, 3), fm, density: 2 * Math.pow(25, Math.random()), size: rnd(0.15, 0.8),
       pos: rnd(0, 0.7), spray: rnd(0, 0.7), trans: pick([-12, -5, 0, 0, 7, 12]), scatter: pick([0, 2, 5, 7, 12]), rev: rnd(0, 0.5),
       width: rnd(0.3, 1), cloud: rnd(0.3, 0.7), steps, hits: Math.max(1, Math.round(steps * rnd(0.2, 0.6))), rot: (Math.random() * steps) | 0,
@@ -1193,7 +1248,7 @@ function seed(wild) {
   S.t = [
     { rate: rnd(0.01, 0.05), shape: pick([0, 3]), target: 0, depth: rnd(0.1, 0.3) * pick([-1, 1]), spread: 1, mask: [1, 1, 1, 1] },
     one(pick([4, 5, 6, 7, 14]), rnd(-0.5, 0.5)),
-    one(pick([3, 8, 9, 10, 11, 12, 13, 15, 16, 17]), rnd(-0.4, 0.4)),
+    one(pick([3, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19]), rnd(-0.4, 0.4)),
     Math.random() < 0.5 ? one(1, rnd(0.15, 0.4)) : one(2, rnd(0.01, 0.05) * pick([-1, 1]))
   ];
   S.sp.room = rnd(2, 9); S.sp.echo = rnd(0.12, 0.9); S.sp.echoFb = rnd(0.2, x(0.7, 0.88)); S.sp.wob = rnd(0, 0.6); S.sp.wobRate = rnd(0.1, 0.6);

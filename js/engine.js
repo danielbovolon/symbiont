@@ -1,4 +1,4 @@
-/* Symbiont 0.4 — sound engine.
+/* Symbiont 0.5 — sound engine.
    SymEngine is self-contained: app.js serialises it with toString() into an AudioWorklet
    module (or runs it on the main thread through a ScriptProcessor fallback).
    Do not reference anything outside the class body. */
@@ -41,9 +41,10 @@ class SymEngine {
     const a = i * Math.PI / 2 + Math.PI / 4;
     return { i, p:{ gate:1, gain:0.7, bx:Math.sin(a)*0.55, by:-Math.cos(a)*0.55, oct:0, tune:0, glide:0.2,
         body:0.45, fold:0.2, fb:0.1, ratio:2, index:0, fm:[0,0,0,0],
+        fmFb:0, fmEnv:0, fbTime:0, bondAmt:1, dType:0, leap:0,
         roar:0, ring:0, hum:0, sing:0, crush:0,
-        fmode:0, tone:0.6, res:0.2, flRate:0.3, flSync:0, flDepth:0, flShape:0, flEnv:0, flSpace:0, flFM:0,
-        orbShape:0, orbAround:0, orbSpeed:0, orbDir:1, orbX:0.25, orbY:0.15, orbTilt:0,
+        fmode:0, tone:0.6, res:0.2, keyTrk:0, flRate:0.3, flSync:0, flDepth:0, flShape:0, flEnv:0, flSpace:0, flFM:0,
+        orbShape:0, orbAround:0, orbSpeed:0, orbDir:1, orbX:0.25, orbY:0.15, orbTilt:0, orbSwing:0, orbBreath:0, orbJump:0,
         src:0, cloud:0.5, density:10, size:0.35, pos:0.3, spray:0.3, trans:0, scatter:4, rev:0.15, width:0.6, track:1,
         pulse:1, steps:16, hits:5, rot:0, div:1, prob:0.9, attack:0.004, decay:0.4, wander:0.4 },
       pat:[], ph:Math.random(), ph2:Math.random(), ph3:Math.random(), phs:0, pht:Math.random(), sx:0, sxp:0, nsx:0,
@@ -52,10 +53,12 @@ class SymEngine {
       cb:new Float32Array(4096), cw:0, cl:100, lp:0, chc:0, chv:0,
       dlL:new Float32Array(128), dlR:new Float32Array(128), dw:0, itdL:0, itdR:0, nitdL:0, nitdR:0, hsL:0, hsR:0, haL:1, haR:1, nhaL:1, nhaR:1,
       orbPh:Math.random(), wpx:0, wpy:0, wnx:0, wny:0, wc:-1,
+      swPh:Math.random(), swC:-1, swPrev:0, swNext:0, flip:1, brPh:Math.random(), octOff:0,
+      fbBuf:new Float32Array(1024), fbW:0, mo:0, rdx:0, rdy:0,
       flPh:Math.random(), flC:-1, flPrev:0, flNext:0, flX:0.37, fl:0, lfs:0, fnorm:0.5,
       ex:0, ey:0, pan:0, dist:0.5, prevR:-1, dop:0, vibPh:Math.random(), vowPh:Math.random(), prox:0,
       gL:0.7, gR:0.7, dG:0, wG:0, ngL:0.7, ngR:0.7, ndG:0, nwG:0, lvl:0, gacc:0,
-      dr:{ th:0, r:0, pos:0, tone:0, fold:0 }, m:new Float32Array(18) };
+      dr:{ th:0, r:0, pos:0, tone:0, fold:0 }, m:new Float32Array(20) };
   }
 
   euclid(i) {
@@ -102,6 +105,7 @@ class SymEngine {
   trigger(i, wander) {
     const v = this.V[i];
     this.walk(v, wander); v.att = 1; v.burst = 1; v.velo = 0.55 + 0.45 * Math.random(); this.trEv.push(i);
+    if (v.p.orbJump > 0 && Math.random() < v.p.orbJump) { v.orbPh += 0.15 + Math.random() * 0.7; v.wc = -1; }
   }
   walk(v, pr) {
     if (Math.random() >= pr) return;
@@ -109,6 +113,8 @@ class SymEngine {
     let d = v.deg + st[(Math.random() * st.length) | 0];
     if (Math.random() < 0.14) d = 0;
     v.deg = Math.max(-5, Math.min(12, d));
+    const L = Math.round(v.p.leap);
+    if (L > 0 && Math.random() < 0.5) v.octOff = Math.round((Math.random() * 2 - 1) * L);
   }
   mutate(i) {
     const v = this.V[i], p = v.p, r = Math.random(), n = v.pat.length;
@@ -128,7 +134,7 @@ class SymEngine {
     const dur = Math.max(64, Math.floor(durS * sr));
     const L = (this.SC[this.g.scale] || this.SC.hira).length;
     const k = Math.round((R() * 2 - 1) * p.scatter * L / 12);
-    const semis = p.trans + this.semi((p.track ? v.deg : 0) + k) + m[2] * 12 + p.tune + v.dop + (R() - 0.5) * 0.12;
+    const semis = p.trans + this.semi((p.track ? v.deg : 0) + k) + (p.track ? v.octOff * 12 : 0) + m[2] * 12 + p.tune + v.dop + (R() - 0.5) * 0.12;
     let rate = Math.pow(2, semis / 12);
     if (R() < p.rev) rate = -rate;
     const ar = Math.abs(rate);
@@ -225,8 +231,18 @@ class SymEngine {
       v.roar = roar; v.ringA = ring; v.hum = hum; v.sing = sing; v.crush = crush;
 
       // ---- space: each organism travels its own path
-      const spd = p.orbSpeed > 0 ? 0.004 * Math.pow(2000, p.orbSpeed) * Math.pow(2, m[14] * 2) : 0;
-      v.orbPh += spd * p.orbDir * bdt; if (v.orbPh > 1e4 || v.orbPh < -1e4) { v.orbPh -= Math.floor(v.orbPh); v.wc = -1; }
+      let spd = p.orbSpeed > 0 ? 0.004 * Math.pow(2000, p.orbSpeed) * Math.pow(2, m[14] * 2) : 0;
+      // swing: the orbit keeps speeding up, slowing down and, when strong, turning back
+      if (p.orbSwing > 0) {
+        v.swPh += (0.08 + spd * 0.25) * bdt;
+        const c = Math.floor(v.swPh), f = v.swPh - c;
+        if (c !== v.swC) { v.swC = c; v.swPrev = v.swNext; v.swNext = Math.random() * 2 - 1; if (p.orbSwing > 0.4 && Math.random() < (p.orbSwing - 0.4) * 0.9) v.flip = -v.flip; }
+        const sw = v.swPrev + (v.swNext - v.swPrev) * (0.5 - 0.5 * Math.cos(Math.PI * f));
+        spd *= Math.pow(2, p.orbSwing * 2.5 * sw);
+      } else v.flip = 1;
+      v.orbPh += spd * p.orbDir * v.flip * bdt;
+      v.brPh += (0.04 + spd * 0.37) * bdt; if (v.brPh > 1e4) v.brPh -= Math.floor(v.brPh);
+      const brK = 1 - p.orbBreath * 0.88 * (0.5 + 0.5 * Math.sin(TAU * v.brPh)); if (v.orbPh > 1e4 || v.orbPh < -1e4) { v.orbPh -= Math.floor(v.orbPh); v.wc = -1; }
       const ph = TAU * v.orbPh, ax = p.orbX, ay = p.orbY;
       let lx, ly;
       switch (p.orbShape) {
@@ -245,6 +261,7 @@ class SymEngine {
         }
         default: lx = ax * Math.cos(ph); ly = ay * Math.sin(ph);
       }
+      lx *= brK; ly *= brK;
       const tc = Math.cos(p.orbTilt), ts = Math.sin(p.orbTilt);
       const rx = lx * tc - ly * ts, ry = lx * ts + ly * tc;
       let px, py;
@@ -276,7 +293,7 @@ class SymEngine {
       v.vibPh += (4.6 + i * 0.37) * bdt; if (v.vibPh > 1) v.vibPh -= 1;
       const vib = Math.sin(TAU * v.vibPh) * sing * 0.22;
       const bend = cl(-st.vy * prox * 1.5, -2, 2);
-      const midi = g.root + 12 * p.oct + p.tune + this.semi(v.deg) + m[2] * 12 + v.dop + vib + bend;
+      const midi = g.root + 12 * (p.oct + v.octOff) + p.tune + this.semi(v.deg) + m[2] * 12 + v.dop + vib + bend;
       const tf = 440 * Math.pow(2, (cl(midi, 0, 130) - 69) / 12);
       v.freq += (tf - v.freq) * (1 - Math.exp(-n / (sr * (0.002 + p.glide * p.glide * 3))));
       v.inc0 = v.inc || v.freq / sr; v.inc = v.freq / sr;
@@ -286,13 +303,16 @@ class SymEngine {
       v.drive = 1 + Math.pow(fold, 1.5) * 14; v.norm = 1 / Math.sin(Math.min(v.drive, Math.PI / 2));
       const bs = cl(1 + m[3], 0, 3) * g.pressure * (1 + prox * 1.5) * (1 + g.eco * ex[i] * 0.5);
       v.fk = [0, 0, 0, 0];
-      for (let j = 0; j < 4; j++) if (j !== i) v.fk[j] = Math.pow(p.fm[j], 1.5) * 6 * bs;
-      v.fbk = Math.pow(p.fb, 1.6) * 3.2;
-      v.rat = p.ratio; v.idx = Math.pow(p.index, 1.5) * 7;
+      for (let j = 0; j < 4; j++) if (j !== i) v.fk[j] = Math.pow(p.fm[j], 1.5) * 6 * bs * p.bondAmt;
+      v.fbk = Math.pow(cl(p.fb + m[19], 0, 1), 1.2) * 3.2;
+      v.fbD = p.fbTime > 0.002 ? 1 + p.fbTime * p.fbTime * 960 : 0;
+      v.rat = p.ratio; v.idx0 = Math.pow(cl(p.index + m[18], 0, 1), 1.3) * 8; v.fmEnv = p.fmEnv;
+      v.mfb = Math.pow(p.fmFb, 1.2) * 1.7;
       v.bell = ring * 2.4; v.bellFloor = 0.25;
       v.humOn = hum > 0.002; v.twR = Math.pow(2, (4 + hum * 9) / 1200); v.twG = hum * 0.75; v.subG = hum * 0.55; v.humN = 1 / (1 + hum * 0.55);
-      v.roarOn = roar > 0.002; v.drv = 1 + Math.pow(roar, 1.3) * 14; v.bias = roar * 0.35; v.tb = ftanh(v.bias);
-      v.roarN = 1 / Math.max(0.3, ftanh(v.drv + v.bias) - v.tb) * 0.9;
+      v.roarOn = roar > 0.002; v.dType = p.dType | 0; v.drv = 1 + Math.pow(roar, 1.3) * (v.dType === 0 ? 14 : 24);
+      v.bias = v.dType === 0 || v.dType === 1 ? roar * 0.35 : 0; v.tb = v.dType === 0 ? ftanh(v.bias) : 0;
+      v.roarN = v.dType === 0 ? 1 / Math.max(0.3, ftanh(v.drv + v.bias) - v.tb) * 0.9 : v.dType === 3 ? 3.2 : 0.85;
       v.ringOn = ring > 0.002; v.cfb = 0.6 + ring * 0.35; v.cDamp = 0.35 + ring * 0.35; v.cl = cl(sr / v.freq, 2, 4090);
       v.cWet = ring * 0.55; v.cN = (1 - v.cfb) * 1.8;
       v.crushOn = crush > 0.002; v.chN = 1 + Math.floor(crush * crush * 48); v.chQ = Math.pow(2, 14 - crush * 11); v.crushMix = Math.min(1, crush * 4);
@@ -327,12 +347,19 @@ class SymEngine {
         const v = V[i], fk = v.fk;
         const inc = v.inc0 + (v.inc - v.inc0) * f;
         // averaging the last two outputs keeps strong self-feedback from hunting into noise
-        let pm = v.fbk * (v.sx + v.sxp) * 0.5 + fk[0] * q0 + fk[1] * q1 + fk[2] * q2 + fk[3] * q3;
-        if (v.idx > 0) { pm += v.idx * Math.sin(TAU * v.ph2); v.ph2 += inc * v.rat; if (v.ph2 >= 1) v.ph2 -= Math.floor(v.ph2); }
+        let fbs;
+        if (v.fbD) { let rp = v.fbW - v.fbD; if (rp < 0) rp += 1024; const ri = rp | 0, rf = rp - ri; fbs = v.fbBuf[ri] + (v.fbBuf[(ri + 1) & 1023] - v.fbBuf[ri]) * rf; }
+        else fbs = (v.sx + v.sxp) * 0.5;
+        let pm = v.fbk * fbs + fk[0] * q0 + fk[1] * q1 + fk[2] * q2 + fk[3] * q3;
+        const idx = v.idx0 * (1 - v.fmEnv + v.fmEnv * v.env);
+        if (idx > 0.0005 || v.mfb > 0) {
+          const mo = Math.sin(TAU * v.ph2 + v.mfb * v.mo); v.mo = mo;
+          pm += idx * mo; v.ph2 += inc * v.rat; if (v.ph2 >= 1) v.ph2 -= Math.floor(v.ph2);
+        }
         if (v.bell > 0) { pm += v.bell * (v.bellFloor + v.env) * Math.sin(TAU * v.ph3); v.ph3 += inc * 3.5; if (v.ph3 >= 1) v.ph3 -= Math.floor(v.ph3); }
         const x = Math.sin(TAU * v.ph + pm);
         v.ph += inc; if (v.ph >= 1) v.ph -= 1;
-        v.nsx = x;
+        v.nsx = x; v.fbBuf[v.fbW] = x; v.fbW = (v.fbW + 1) & 1023;
         let c = Math.sin(x * v.drive) * v.norm;
         if (v.humOn) {
           c = (c + Math.sin(TAU * v.pht + pm * 0.5) * v.twG + Math.sin(TAU * v.phs) * v.subG) * v.humN;
@@ -357,8 +384,15 @@ class SymEngine {
           c = c * (1 - v.sWet) + sum * v.sWet * 3.2;
         }
         if (v.roarOn) {
-          const z = c * v.drv + v.bias, zz = z < -3 ? -1 : z > 3 ? 1 : z * (27 + z * z) / (27 + 9 * z * z);
-          c = c + ((zz - v.tb) * v.roarN - c) * Math.min(1, v.roar * 3);
+          const z = c * v.drv + v.bias; let zz;
+          switch (v.dType) {
+            case 1: zz = z > 1 ? 1 : z < -1 ? -1 : z; break;                                   // fuzz: hard clip
+            case 2: zz = Math.sin(z * 1.2); break;                                              // fold: wraps back on itself
+            case 3: { const t = Math.abs(c) * (1.5 + v.roar * 6); zz = t > 3 ? 1 : t * (27 + t * t) / (27 + 9 * t * t); break; } // rectify: octave up
+            default: zz = z < -3 ? -1 : z > 3 ? 1 : z * (27 + z * z) / (27 + 9 * z * z);       // tube
+          }
+          const dz = (zz - v.tb) * v.roarN, hp = dz - v.rdx + 0.997 * v.rdy; v.rdx = dz; v.rdy = hp;
+          c = c + (hp - c) * Math.min(1, v.roar * 3);
         }
         if (v.crushOn) {
           if (++v.chc >= v.chN) { v.chc = 0; v.chv = Math.round(c * v.chQ) / v.chQ; }
@@ -403,7 +437,7 @@ class SymEngine {
       const res = cl(p.res + m[17] * 0.5, 0, 1), kk = 2 - 1.98 * Math.pow(res, 0.8);
       const flRate = p.flSync ? (g.bpm / 60) / this.SYNC[Math.round(cl(p.flRate, 0, 1) * 7)] : 0.02 * Math.pow(2000, cl(p.flRate, 0, 1));
       const baseOct = L30 + cl(p.tone + m[7] * 0.5 + v.dr.tone * 0.5, 0, 1) * 9.5 + Math.log2(v.bright)
-        - v.hum * 0.6 + v.sing * 0.3 + p.flSpace * (1 - v.dist * 2) * 2.5;
+        - v.hum * 0.6 + v.sing * 0.3 + p.flSpace * (1 - v.dist * 2) * 2.5 + p.keyTrk * Math.log2(v.freq / 110);
       const fmA = p.flFM * p.flFM * 5, perSample = fmA > 0.001; const bpG = Math.sqrt(kk);
       let a1 = 0, a2 = 0, a3 = 0, pk = 0, oct = baseOct;
       for (let s = 0; s < n; s++) {
@@ -423,7 +457,7 @@ class SymEngine {
             default: lf = Math.sin(TAU * fr);
           }
           v.fl = lf;
-          v.lfs += (lf * p.flDepth * 3.5 + v.env * p.flEnv * 4 - v.lfs) * (p.flShape === 3 || p.flShape === 5 ? 0.6 : 0.35);
+          v.lfs += (lf * p.flDepth * 6 + v.env * p.flEnv * 6 - v.lfs) * (p.flShape === 3 || p.flShape === 5 ? 0.6 : 0.35);
           oct = baseOct + v.lfs;
           if (!perSample) {
             const gg = Math.tan(Math.PI * cl(Math.pow(2, oct), 20, sr * 0.45) / sr);
@@ -460,6 +494,7 @@ class SymEngine {
       if (!(stt[0] === stt[0]) || Math.abs(stt[0]) > 1e4) { stt[0] = stt[1] = stt[2] = stt[3] = 0; }
       if (!(v.hsL === v.hsL) || !(v.hsR === v.hsR)) { v.hsL = v.hsR = 0; v.dlL.fill(0); v.dlR.fill(0); }
       if (!(v.lp === v.lp)) { v.lp = 0; v.cb.fill(0); v.fs.fill(0); }
+      if (!(v.mo === v.mo) || !(v.sx === v.sx)) { v.mo = 0; v.sx = v.sxp = v.nsx = 0; v.fbBuf.fill(0); }
       v.gL = v.ngL; v.gR = v.ngR; v.dG = v.ndG; v.wG = v.nwG; v.itdL = v.nitdL; v.itdR = v.nitdR; v.haL = v.nhaL; v.haR = v.nhaR;
       v.lvl = Math.max(v.lvl * 0.88, pk);
     }

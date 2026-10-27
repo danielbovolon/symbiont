@@ -1,4 +1,4 @@
-# Symbiont 0.4
+# Symbiont 0.5
 
 A generative feedback / FM / granular instrument built as an ecosystem.
 Four organisms live in a polar listening field around you. They bend each other's phase, feed on a shared memory of everything the room has heard, compete as populations, and rewrite their own rhythms while they play. Nothing repeats exactly.
@@ -23,7 +23,7 @@ Press **Wake**. On iOS, tap Wake once more if you hear nothing: Safari only star
    ```bash
    git init
    git add .
-   git commit -m "Symbiont 0.4"
+   git commit -m "Symbiont 0.5"
    git branch -M main
    git remote add origin git@github.com:<you>/symbiont.git
    git push -u origin main
@@ -32,7 +32,7 @@ Press **Wake**. On iOS, tap Wake once more if you hear nothing: Safari only star
 3. After a minute the app is live at `https://<you>.github.io/symbiont/`.
 4. On a phone, open that URL and use **Add to Home Screen** (iOS Share menu, Android browser menu) to install it as an app.
 
-When you publish changes, bump `VERSION` in `js/app.js` and in `sw.js` (`symbiont-v0.4` → `symbiont-v0.5`) so installed copies pick up the new files. Tag releases with `git tag v0.4 && git push --tags`. See `CHANGELOG.md` for the version history.
+When you publish changes, bump `VERSION` in `js/app.js` and in `sw.js` (`symbiont-v0.5` → `symbiont-v0.6`) so installed copies pick up the new files. Tag releases with `git tag v0.5 && git push --tags`. See `CHANGELOG.md` for the version history.
 
 `.nojekyll` is included so GitHub Pages serves the files as they are.
 
@@ -76,20 +76,22 @@ The outer ring is the **memory ring**, the last 8 seconds of the master output. 
 
 **Organism** page:
 
-- **Voice**: octave (−4 to +3), fine tune, body (oscillator vs. grain cloud), glide, Sharp (wavefold), Self-bend (feedback FM on a pure sine), and Harmonic FM with integer ratios (×½ to ×7)
-- **Colour**: five voicings you can blend freely
-  - **Roar**: warm asymmetric tube drive
+- **Voice**: octave (−4 to +4), octave leap (each new note may jump up to ±3 octaves), fine tune, glide, body (oscillator vs. grain cloud)
+- **FM · feedback · drive**: the engine, in three groups
+  - **FM**: FM amount, FM ratio (continuous ×0.25 to ×8, or the quick ratios ×½ … ×7; whole numbers sound harmonic, others metallic), FM feedback (the operator modulates itself: bright → saw-like → noise), FM follows hits (the FM opens with each hit and closes as it decays)
+  - **Feedback**: self-feedback (above 70 % it tips into chaos), feedback time (instant, or delayed up to 20 ms for comb-like and chaotic engine sounds), bond depth (scales every bond reaching this organism, up to ×3) and the three bonds from the other organisms
+  - **Distortion**: type (tube, fuzz, fold, rectify — rectify adds an octave above), drive, wavefold, crush (sample-rate and bit reduction)
+- **Colour**: three voicings you can blend freely
   - **Ring**: bell partials (1 : 3.5 FM) that open with each hit, plus a string resonance tuned to the note
   - **Hum**: a detuned twin that beats slowly against the voice, plus a sub octave
   - **Sing**: vibrato and two soft formants drifting through vowels
-  - **Crush**: sample-rate and bit reduction (14 bit down to 3 bit, up to ÷49)
-- **Filter**: lowpass, bandpass, highpass or notch; resonance up to self-oscillation (“scream”). It moves on its own:
-  - **LFO**: sine, tri, ramp, drift, step or chaos; free (50 s to 40 Hz) or locked to the tempo (8 bars to 1/16); up to ±3.5 octaves
-  - **Env → cutoff**: each hit opens or closes it
+- **Filter**: lowpass, bandpass, highpass or notch; resonance up to self-oscillation (“scream”); key track (cutoff follows the note, including octave leaps). It moves on its own:
+  - **LFO**: sine, tri, ramp, drift, step or chaos; free (50 s to 40 Hz) or locked to the tempo (8 bars to 1/16); up to ±6 octaves
+  - **Env → cutoff**: each hit opens or closes it (±6 octaves)
   - **Near → bright**: cutoff follows the organism's distance from you
   - **Audio FM**: the organism modulates its own cutoff at audio rate for snarls and metallic edges
   - *Cutoff now* shows the live cutoff. Each mixer strip also has a filter bar: the dot is the live cutoff, the shaded range is how far the LFO moves it. Drag the bar sideways to set the LFO depth, tap it to open the filter
-- **Orbit**: how the organism travels. Around *its cross* or around *the listener* (full circles past your head and behind you); paths: ellipse, figure eight, pendulum, spiral or wander (smooth flights to random points); clockwise or counter-clockwise; speed from still to 8 Hz (a whirling, rotating-speaker effect at the top); X and Y axis; tilt
+- **Orbit**: how the organism travels. Around *its cross* or around *the listener* (full circles past your head and behind you); paths: ellipse, figure eight, pendulum, spiral or wander (smooth flights to random points); clockwise or counter-clockwise; speed from still to 8 Hz (a whirling, rotating-speaker effect at the top); X and Y axis; tilt. **Travel**: *Swing* keeps changing the speed and, above 40 %, sometimes turns the organism back; *Breathe* swells and shrinks the path so the sound comes close and drifts far away; *Jump* lets pulse hits throw the organism to another point of its path
 - **Bonds**: audio-rate phase modulation from each other organism
 - **Cloud**: grain source (Memory ring, or Recording to load a file; tap Recording again to replace it), density, size, position, spray, stereo width, transpose, scatter in scale steps, reverse
 - **Pulse**: drone or euclidean pulse ring with steps, hits, rotation, attack (or the swell time of a drone), decay, chance, wander and step length. Tap cells to flip steps
@@ -98,7 +100,7 @@ The outer ring is the **memory ring**, the last 8 seconds of the master output. 
 
 - **Motion**: Motion scales every orbit (up to 300 %), Doppler sets how much pitch bends as organisms rush toward or away from you, Pressure scales every bond (up to ×3).
 - **Ecology**: a four-species competitive Lotka–Volterra system in its chaotic regime. Each population swells and starves its organism's level, bond depth and grain density. 
-- **Tides**: four modulators with Sine, Tri, Saw, Drift, Step, Chaos (logistic map), Ecology (follows population) and Follow (follows loudness) shapes. Each has 18 possible targets including cutoff, resonance, the colours, crush, orbit speed and gain, rates from 200 s to 80 Hz, phase spread across organisms and a per-organism mask
+- **Tides**: four modulators with Sine, Tri, Saw, Drift, Step, Chaos (logistic map), Ecology (follows population) and Follow (follows loudness) shapes. Each has 20 possible targets including cutoff, resonance, FM amount, self-feedback, drive, fold, the colours, crush, orbit speed and gain, rates from 200 s to 80 Hz, phase spread across organisms and a per-organism mask
 - **Space**: algorithmic room; ping-pong echo with a wobbling delay line (return capped at 90 %, see below); warm master Drive; stereo width; memory feed; master
 - **Clock**: tempo, root, scale (including Harmonic and Rast microtonal sets), mutation, drift. **Seed** grows a completely new ecosystem; **Seed a wild one** (or `W`) grows an extreme one
 
@@ -130,6 +132,13 @@ Version 0.4 makes every feedback path unconditionally stable:
 - **Echo**: the return is capped at 90 %, and the saturator inside the loop has a gain of at most 1 (in 0.3 it had a small-signal gain of about 1.7, so the loop ran away from roughly 57 % return). A highpass inside the loop stops low-end build-up.
 - **Memory ring**: a slow leveller on the write keeps the granular feedback loop from growing.
 - **Master**: a fast compressor followed by a soft clipper that never exceeds −0.1 dBFS. Recordings are taken after it.
+
+## On a phone
+
+The whole instrument is one scrolling page: the radar on top, then the mixer, master meters and editor. The Organism / World tabs stay pinned to the top while you scroll.
+- Swipe up and down anywhere to scroll, including over the empty radar, the mixer and the sliders. A vertical swipe never changes a slider; drag sideways to set one.
+- Touch an organism to drag it. On the faders, grab the coloured cap; swiping elsewhere on the strip scrolls.
+- Drag sideways on the empty radar to stir.
 
 ## Browser notes
 

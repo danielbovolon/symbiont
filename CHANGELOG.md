@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5 — 2026-10-27
+- Phones: the whole instrument is now one scrolling page (radar, mixer, master, editor) with pinned Organism / World tabs. Swipes scroll everywhere; vertical swipes never change sliders; faders grab only at the cap
+- New FM · feedback · drive section: FM amount, continuous FM ratio, FM feedback, FM follows hits; self-feedback with a feedback delay (up to 20 ms) and bond depth (×3) next to the bonds; distortion types tube, fuzz, fold and rectify with drive, wavefold and crush
+- Octave −4 to +4 and Octave leap (notes jump up to ±3 octaves)
+- Filter: key track; LFO and envelope modulation up to ±6 octaves
+- Travel: Swing (speed keeps changing, can reverse), Breathe (path swells and shrinks: near ↔ far), Jump (pulse hits throw the organism along its path); faster, livelier default orbits
+- Tides can target FM amount and self-feedback
+
 ## 0.4 — 2026-10-27
 - Fixed: echo feedback ran away and distorted. Return now capped at 90 %, unity-gain saturator and highpass inside the loop
 - Master safety: fast compressor plus soft clipper (ceiling −0.1 dBFS); memory ring leveller keeps the granular loop stable

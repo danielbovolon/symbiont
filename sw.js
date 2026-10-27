@@ -1,5 +1,5 @@
 /* Symbiont service worker: offline app shell + cached fonts. Bump VERSION on every release. */
-const VERSION = 'symbiont-v0.4';
+const VERSION = 'symbiont-v0.5';
 const SHELL = ['./', 'index.html', 'css/style.css', 'js/engine.js', 'js/app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
